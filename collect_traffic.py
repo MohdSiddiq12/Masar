@@ -62,6 +62,7 @@ async def get_weather(lat: float, lon: float) -> dict:
 
 async def collect_and_store():
     print(f"Starting collection at {datetime.now(timezone.utc).isoformat()}")
+    successful_rows = 0
     
     async with httpx.AsyncClient() as client:  # shared client if needed
         for loc in LOCATIONS:
@@ -86,10 +87,15 @@ async def collect_and_store():
                 }
                 
                 supabase.table("traffic_logs").insert(row).execute()
+                successful_rows += 1
                 print(f"✓ {loc['name']} | Speed ratio: {traffic['speed_ratio']} | Rain: {weather['rain_mm']}mm")
                 
             except Exception as e:
                 print(f"✗ Failed {loc['name']}: {e}")
+
+    print(f"Stored {successful_rows}/{len(LOCATIONS)} rows in Supabase traffic_logs.")
+    if successful_rows == 0:
+        raise RuntimeError("No traffic data was stored in Supabase.")
 
 if __name__ == "__main__":
     import asyncio
