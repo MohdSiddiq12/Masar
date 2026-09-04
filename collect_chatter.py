@@ -21,7 +21,7 @@ def get_supabase_client():
     return create_client(url, key)
 
 
-async def fetch_dubai_chatter(limit: int = 25) -> list[dict]:
+async def fetch_dubai_chatter(limit: int = 25) -> list[dict] | None:
     client_id = os.getenv("REDDIT_CLIENT_ID")
     client_secret = os.getenv("REDDIT_CLIENT_SECRET")
     username = os.getenv("REDDIT_USERNAME")
@@ -29,7 +29,7 @@ async def fetch_dubai_chatter(limit: int = 25) -> list[dict]:
     user_agent = os.getenv("REDDIT_USER_AGENT", DEFAULT_USER_AGENT)
     if not all((client_id, client_secret, username, password)):
         print("Reddit collection skipped: configure Reddit OAuth secrets.")
-        return []
+        return None
 
     params = {"limit": min(max(limit, 1), 100), "raw_json": 1}
 
@@ -56,10 +56,10 @@ async def fetch_dubai_chatter(limit: int = 25) -> list[dict]:
             posts = response.json().get("data", {}).get("children", [])
     except httpx.HTTPStatusError as error:
         print(f"Reddit collection skipped: API returned HTTP {error.response.status_code}.")
-        return []
+        return None
     except (httpx.RequestError, KeyError, ValueError) as error:
         print(f"Reddit collection skipped: {error}.")
-        return []
+        return None
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     chatter = []
@@ -83,13 +83,17 @@ async def fetch_dubai_chatter(limit: int = 25) -> list[dict]:
             }
         )
 
+    print(f"Reddit collection completed: fetched {len(posts)} posts, found {len(chatter)} matching posts.")
     return chatter
 
 
 async def collect_and_store_chatter() -> int:
     posts = await fetch_dubai_chatter()
+    if posts is None:
+        print("Reddit collection finished without storing posts.")
+        return 0
     if not posts:
-        print("No matching Reddit posts from the last 24 hours.")
+        print("No Reddit posts matched the traffic or weather keywords in the last 24 hours.")
         return 0
 
     result = (
