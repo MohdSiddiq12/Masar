@@ -42,3 +42,11 @@ jobs:
           echo "Starting collection at $(date -u)"
           python collect_traffic.py
           echo "Collection finished at $(date -u)"
+
+      - name: Collect Reddit chatter
+        continue-on-error: true
+        env:
+          REDDIT_USER_AGENT: masar-traffic-agent/1.0
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python collect_chatter.py
