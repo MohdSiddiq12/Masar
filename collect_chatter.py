@@ -7,29 +7,59 @@ from supabase import create_client
 
 load_dotenv()
 
-REDDIT_URL = "https://www.reddit.com/r/dubai/new.json"
+REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
+REDDIT_URL = "https://oauth.reddit.com/r/dubai/new.json"
 KEYWORDS = ("traffic", "accident", "jam", "metro", "szr", "rain", "rta")
 DEFAULT_USER_AGENT = "masar-traffic-agent/1.0 (portfolio project)"
 
 
 def get_supabase_client():
     url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
     if not url or not key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be configured.")
     return create_client(url, key)
 
 
 async def fetch_dubai_chatter(limit: int = 25) -> list[dict]:
-    headers = {
-        "User-Agent": os.getenv("REDDIT_USER_AGENT", DEFAULT_USER_AGENT),
-    }
+    client_id = os.getenv("REDDIT_CLIENT_ID")
+    client_secret = os.getenv("REDDIT_CLIENT_SECRET")
+    username = os.getenv("REDDIT_USERNAME")
+    password = os.getenv("REDDIT_PASSWORD")
+    user_agent = os.getenv("REDDIT_USER_AGENT", DEFAULT_USER_AGENT)
+    if not all((client_id, client_secret, username, password)):
+        print("Reddit collection skipped: configure Reddit OAuth secrets.")
+        return []
+
     params = {"limit": min(max(limit, 1), 100), "raw_json": 1}
 
-    async with httpx.AsyncClient(timeout=20, headers=headers) as client:
-        response = await client.get(REDDIT_URL, params=params)
-        response.raise_for_status()
-        posts = response.json().get("data", {}).get("children", [])
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            token_response = await client.post(
+                REDDIT_TOKEN_URL,
+                data={"grant_type": "password", "username": username, "password": password},
+                auth=(client_id, client_secret),
+                headers={"User-Agent": user_agent},
+            )
+            token_response.raise_for_status()
+            access_token = token_response.json()["access_token"]
+
+            response = await client.get(
+                REDDIT_URL,
+                params=params,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "User-Agent": user_agent,
+                },
+            )
+            response.raise_for_status()
+            posts = response.json().get("data", {}).get("children", [])
+    except httpx.HTTPStatusError as error:
+        print(f"Reddit collection skipped: API returned HTTP {error.response.status_code}.")
+        return []
+    except (httpx.RequestError, KeyError, ValueError) as error:
+        print(f"Reddit collection skipped: {error}.")
+        return []
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     chatter = []

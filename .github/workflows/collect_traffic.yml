@@ -31,6 +31,8 @@ jobs:
           echo "OPENWEATHER_API_KEY is set: ${{ secrets.OPENWEATHER_API_KEY != '' }}"
           echo "SUPABASE_URL is set: ${{ secrets.SUPABASE_URL != '' }}"
           echo "SUPABASE_KEY is set: ${{ secrets.SUPABASE_KEY != '' }}"
+          echo "REDDIT_CLIENT_ID is set: ${{ secrets.REDDIT_CLIENT_ID != '' }}"
+          echo "REDDIT_CLIENT_SECRET is set: ${{ secrets.REDDIT_CLIENT_SECRET != '' }}"
 
       - name: Run collection script
         env:
@@ -38,6 +40,7 @@ jobs:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "Starting collection at $(date -u)"
           python collect_traffic.py
@@ -47,6 +50,11 @@ jobs:
         continue-on-error: true
         env:
           REDDIT_USER_AGENT: masar-traffic-agent/1.0
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USERNAME: ${{ secrets.REDDIT_USERNAME }}
+          REDDIT_PASSWORD: ${{ secrets.REDDIT_PASSWORD }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python collect_chatter.py
