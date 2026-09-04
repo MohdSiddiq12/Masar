@@ -2,26 +2,35 @@ name: Collect Traffic Data
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
-  workflow_dispatch:
+    - cron: '*/10 * * * *'          # every 10 minutes
+  workflow_dispatch:                # manual button
 
 jobs:
   collect:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install httpx python-dotenv supabase
+
+      - name: Debug - Check secrets are present
+        run: |
+          echo "TOMTOM_API_KEY is set: ${{ secrets.TOMTOM_API_KEY != '' }}"
+          echo "OPENWEATHER_API_KEY is set: ${{ secrets.OPENWEATHER_API_KEY != '' }}"
+          echo "SUPABASE_URL is set: ${{ secrets.SUPABASE_URL != '' }}"
+          echo "SUPABASE_KEY is set: ${{ secrets.SUPABASE_KEY != '' }}"
 
       - name: Run collection script
         env:
@@ -29,4 +38,7 @@ jobs:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: python collect_traffic.py
+        run: |
+          echo "Starting collection at $(date -u)"
+          python collect_traffic.py
+          echo "Collection finished at $(date -u)"
