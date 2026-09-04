@@ -7,107 +7,93 @@ from supabase import create_client
 
 load_dotenv()
 
-REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
-REDDIT_URL = "https://oauth.reddit.com/r/dubai/new.json"
-KEYWORDS = ("traffic", "accident", "jam", "metro", "szr", "rain", "rta")
-DEFAULT_USER_AGENT = "masar-traffic-agent/1.0 (portfolio project)"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+REDDIT_URL = "https://www.reddit.com/r/dubai/new.json"
+USER_AGENT = os.getenv(
+    "REDDIT_USER_AGENT",
+    "python:masar.portfolio.dev:v1.0 (by /u/your_reddit_username)",
+)
+KEYWORDS = {
+    "traffic",
+    "accident",
+    "jam",
+    "metro",
+    "szr",
+    "rain",
+    "rta",
+    "congestion",
+    "road",
+    "sheikh zayed",
+}
 
 
-def get_supabase_client():
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
-    if not url or not key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be configured.")
-    return create_client(url, key)
-
-
-async def fetch_dubai_chatter(limit: int = 25) -> list[dict] | None:
-    client_id = os.getenv("REDDIT_CLIENT_ID")
-    client_secret = os.getenv("REDDIT_CLIENT_SECRET")
-    username = os.getenv("REDDIT_USERNAME")
-    password = os.getenv("REDDIT_PASSWORD")
-    user_agent = os.getenv("REDDIT_USER_AGENT", DEFAULT_USER_AGENT)
-    if not all((client_id, client_secret, username, password)):
-        print("Reddit collection skipped: configure Reddit OAuth secrets.")
-        return None
-
+def fetch_dubai_chatter(limit: int = 30) -> list[dict] | None:
+    headers = {"User-Agent": USER_AGENT}
     params = {"limit": min(max(limit, 1), 100), "raw_json": 1}
 
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            token_response = await client.post(
-                REDDIT_TOKEN_URL,
-                data={"grant_type": "password", "username": username, "password": password},
-                auth=(client_id, client_secret),
-                headers={"User-Agent": user_agent},
-            )
-            token_response.raise_for_status()
-            access_token = token_response.json()["access_token"]
-
-            response = await client.get(
-                REDDIT_URL,
-                params=params,
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                    "User-Agent": user_agent,
-                },
-            )
+        with httpx.Client(timeout=15, headers=headers) as client:
+            response = client.get(REDDIT_URL, params=params)
             response.raise_for_status()
             posts = response.json().get("data", {}).get("children", [])
     except httpx.HTTPStatusError as error:
-        print(f"Reddit collection skipped: API returned HTTP {error.response.status_code}.")
+        print(f"Reddit request failed with HTTP {error.response.status_code}.")
         return None
-    except (httpx.RequestError, KeyError, ValueError) as error:
-        print(f"Reddit collection skipped: {error}.")
+    except (httpx.RequestError, ValueError) as error:
+        print(f"Reddit request failed: {error}.")
         return None
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    chatter = []
+    matched = []
+    fetched_at = datetime.now(timezone.utc).isoformat()
+
     for post in posts:
-        post_data = post.get("data", {})
-        text_content = f"{post_data.get('title', '')} {post_data.get('selftext', '')}".lower()
-        created_at = datetime.fromtimestamp(post_data.get("created_utc", 0), timezone.utc)
-        if created_at < cutoff or not any(keyword in text_content for keyword in KEYWORDS):
+        data = post.get("data", {})
+        created = datetime.fromtimestamp(data.get("created_utc", 0), tz=timezone.utc)
+        text = f"{data.get('title', '')} {data.get('selftext', '')}".lower()
+        if created < cutoff or not any(keyword in text for keyword in KEYWORDS):
             continue
 
-        chatter.append(
+        matched.append(
             {
-                "reddit_id": post_data["id"],
-                "title": post_data.get("title", ""),
-                "score": post_data.get("score", 0),
-                "post_url": f"https://www.reddit.com{post_data.get('permalink', '')}",
-                "snippet": post_data.get("selftext", "")[:500],
-                "published_at": created_at.isoformat(),
-                "raw_data": post_data,
-                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "reddit_id": data["id"],
+                "title": data.get("title", ""),
+                "score": data.get("score", 0),
+                "post_url": f"https://reddit.com{data.get('permalink', '')}",
+                "snippet": (data.get("selftext") or "")[:300],
+                "published_at": created.isoformat(),
+                "fetched_at": fetched_at,
+                "raw_data": data,
             }
         )
 
-    print(f"Reddit collection completed: fetched {len(posts)} posts, found {len(chatter)} matching posts.")
-    return chatter
+    print(f"Reddit collection completed: fetched {len(posts)} posts, found {len(matched)} matching posts.")
+    return matched
 
 
-async def collect_and_store_chatter() -> int:
-    posts = await fetch_dubai_chatter()
+def main() -> int:
+    print("Starting Reddit collection (public JSON endpoint)...")
+
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("Missing Supabase credentials; no posts were stored.")
+        return 0
+
+    posts = fetch_dubai_chatter()
     if posts is None:
         print("Reddit collection finished without storing posts.")
         return 0
     if not posts:
-        print("No Reddit posts matched the traffic or weather keywords in the last 24 hours.")
+        print("No matching posts found in the last 24 hours.")
         return 0
 
-    result = (
-        get_supabase_client()
-        .table("reddit_chatter")
-        .upsert(posts, on_conflict="reddit_id")
-        .execute()
-    )
-    stored_count = len(result.data or posts)
-    print(f"Stored {stored_count} Reddit posts in Supabase reddit_chatter.")
-    return stored_count
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    for post in posts:
+        supabase.table("reddit_chatter").upsert(post, on_conflict="reddit_id").execute()
+
+    print(f"Stored {len(posts)} posts in reddit_chatter.")
+    return len(posts)
 
 
 if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(collect_and_store_chatter())
+    main()
