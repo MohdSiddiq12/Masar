@@ -96,6 +96,10 @@ async def collect_and_store():
     print(f"Stored {successful_rows}/{len(LOCATIONS)} rows in Supabase traffic_logs.")
     if successful_rows == 0:
         raise RuntimeError("No traffic data was stored in Supabase.")
+    if successful_rows < len(LOCATIONS):
+        raise RuntimeError(
+            f"Only {successful_rows}/{len(LOCATIONS)} traffic rows were stored in Supabase."
+        )
 
 if __name__ == "__main__":
     import asyncio

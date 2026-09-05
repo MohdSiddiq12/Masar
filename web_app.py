@@ -9,6 +9,8 @@ from urllib.parse import parse_qs, urlparse
 
 from dotenv import load_dotenv
 
+import masar.live_traffic as live_traffic
+
 load_dotenv()
 
 ROOT = Path(__file__).parent
@@ -36,12 +38,20 @@ class DemoSynthesisLLM:
 
 
 def make_state(payload):
+    current_speed = float(payload.get("current_speed", 20))
+    free_flow_speed = float(payload.get("free_flow_speed", 90))
+    # congestion_ratio previously defaulted to a flat 0.22 no matter what
+    # speeds were entered, so manual current/free-flow inputs never
+    # actually changed the prediction. Derive it the same way the
+    # collector does (current / free-flow) unless it's given explicitly
+    # (e.g. by a live traffic_logs row, which reports its own ratio).
+    default_ratio = round(current_speed / free_flow_speed, 3) if free_flow_speed else 0.22
     return {
-        "location": payload.get("location", "Sheikh Zayed Road"),
+        "location": payload.get("location") or payload.get("origin") or "Sheikh Zayed Road",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "current_speed": float(payload.get("current_speed", 20)),
-        "free_flow_speed": float(payload.get("free_flow_speed", 90)),
-        "congestion_ratio": float(payload.get("congestion_ratio", 0.22)),
+        "current_speed": current_speed,
+        "free_flow_speed": free_flow_speed,
+        "congestion_ratio": float(payload.get("congestion_ratio", default_ratio)),
         "incidents": payload.get("incidents") or [
             "Accident reported near Trade Centre exit"
         ],
@@ -64,21 +74,53 @@ def make_state(payload):
     }
 
 
+def _get_supabase_client():
+    from supabase import create_client
+
+    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+
+
 def run_recommendation(payload):
     from masar.graph import build_graph
 
     demo = payload.get("demo", True)
+    origin = payload.get("origin") or "Marina"
+    use_live_traffic = payload.get("use_live_traffic", True)
+
+    # Live-data lookup is independent of "demo": demo only controls whether
+    # Groq is faked out for speed/cost, not whether the traffic numbers are
+    # real. Best-effort and never fatal -- if Supabase creds are missing or
+    # the request fails, we fall back to whatever was manually entered.
+    live_fields, live_row, live_traffic_error = {}, None, None
+    if use_live_traffic:
+        try:
+            client = _get_supabase_client()
+            live_fields, live_row = live_traffic.get_live_fields(client, origin)
+        except Exception as error:
+            live_traffic_error = str(error)
+
+    effective_payload = {**payload, "location": origin, **live_fields}
+
     if demo:
         graph = build_graph(DemoContextLLM(), DemoSynthesisLLM())
     else:
         graph = build_graph()
-    return graph.invoke(make_state(payload))
+
+    result = graph.invoke(make_state(effective_payload))
+
+    # Surface which data source actually drove this recommendation, so the
+    # UI never shows live traffic signals next to a manually-driven result
+    # without saying so.
+    result["used_live_traffic"] = bool(live_fields)
+    if live_row is not None:
+        result["live_traffic_age_seconds"] = live_traffic.row_age_seconds(live_row)
+    if live_traffic_error:
+        result["live_traffic_error"] = live_traffic_error
+    return result
 
 
 def traffic_snapshot():
-    from supabase import create_client
-
-    client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+    client = _get_supabase_client()
     response = (
         client.table("traffic_logs")
         .select("location_name,current_speed,free_flow_speed,speed_ratio,weather_main,created_at")
@@ -87,6 +129,14 @@ def traffic_snapshot():
         .execute()
     )
     return response.data or []
+
+
+def latest_traffic_for_location(location):
+    client = _get_supabase_client()
+    fields, row = live_traffic.get_live_fields(client, location)
+    if row is None:
+        return {"row": None}
+    return {"row": row, "fields": fields, "age_seconds": live_traffic.row_age_seconds(row)}
 
 
 class MasarHandler(BaseHTTPRequestHandler):
@@ -110,6 +160,16 @@ class MasarHandler(BaseHTTPRequestHandler):
         if path == "/api/traffic":
             try:
                 self._send(200, json.dumps({"rows": traffic_snapshot()}, default=str))
+            except Exception as error:
+                self._send(503, json.dumps({"error": str(error)}))
+            return
+        if path == "/api/traffic/latest":
+            location = (parse_qs(urlparse(self.path).query).get("location") or [None])[0]
+            if not location:
+                self._send(400, json.dumps({"error": "location query param is required"}))
+                return
+            try:
+                self._send(200, json.dumps(latest_traffic_for_location(location), default=str))
             except Exception as error:
                 self._send(503, json.dumps({"error": str(error)}))
             return

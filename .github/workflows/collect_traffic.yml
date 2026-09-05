@@ -2,8 +2,12 @@ name: Collect Traffic Data
 
 on:
   schedule:
-    - cron: '*/10 * * * *'          # every 10 minutes
+    - cron: '0 * * * *'              # every hour at minute 0 UTC
   workflow_dispatch:                # manual button
+
+concurrency:
+  group: traffic-collection
+  cancel-in-progress: false
 
 jobs:
   collect:
