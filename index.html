@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Masar | Commute intelligence</title>
+  <style>
+    :root { --ink:#17211f; --muted:#667572; --line:#d9e2dc; --paper:#f5f7f2; --panel:#fff; --teal:#087f73; --teal-dark:#075e58; --amber:#e8a62d; --red:#c95745; --shadow:0 18px 45px rgba(24,47,41,.09); }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:radial-gradient(circle at 90% 0%, #e3f0e8 0, transparent 34%), var(--paper); font:15px/1.5 Georgia, "Times New Roman", serif; }
+    button, input, select { font:inherit; }
+    .shell { max-width:1240px; margin:0 auto; padding:28px 22px 54px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:34px; }
+    .brand { display:flex; align-items:center; gap:12px; font-weight:bold; font-size:22px; letter-spacing:.02em; }
+    .mark { width:38px; height:38px; display:grid; place-items:center; background:var(--teal); color:white; border-radius:12px 12px 12px 3px; font-family:Arial,sans-serif; font-weight:800; }
+    .status { display:flex; align-items:center; gap:8px; color:var(--muted); font-family:Arial,sans-serif; font-size:13px; }
+    .dot { width:8px; height:8px; border-radius:50%; background:#43a96b; box-shadow:0 0 0 4px #dcefe2; }
+    .intro { max-width:700px; margin-bottom:25px; }
+    h1 { font-size:clamp(34px,5vw,62px); line-height:1.02; letter-spacing:-.03em; margin:0 0 12px; font-weight:700; }
+    .intro p { color:var(--muted); font-size:17px; margin:0; }
+    .grid { display:grid; grid-template-columns:360px 1fr; gap:22px; align-items:start; }
+    .panel { background:rgba(255,255,255,.86); border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); }
+    .controls { padding:22px; position:sticky; top:18px; }
+    .panel-title { display:flex; justify-content:space-between; align-items:center; margin:0 0 18px; font-size:20px; }
+    label { display:block; color:var(--muted); font-family:Arial,sans-serif; font-size:12px; font-weight:700; margin:15px 0 6px; text-transform:uppercase; letter-spacing:.08em; }
+    select, input { width:100%; border:1px solid var(--line); border-radius:5px; padding:11px 12px; color:var(--ink); background:#fbfcfa; }
+    .field-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .switch-row { display:flex; justify-content:space-between; align-items:center; margin:18px 0; color:var(--muted); font-family:Arial,sans-serif; font-size:13px; }
+    .switch { position:relative; width:42px; height:24px; }
+    .switch input { opacity:0; width:0; height:0; }
+    .slider { position:absolute; inset:0; cursor:pointer; border-radius:20px; background:#cbd7d1; transition:.2s; }
+    .slider:before { content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; border-radius:50%; background:white; transition:.2s; }
+    .switch input:checked + .slider { background:var(--teal); }
+    .switch input:checked + .slider:before { transform:translateX(18px); }
+    .primary { width:100%; border:0; border-radius:5px; padding:13px 16px; color:white; background:var(--teal); cursor:pointer; font-family:Arial,sans-serif; font-weight:700; }
+      .primary:disabled { opacity:.65; cursor:wait; }
+    .primary:hover { background:var(--teal-dark); }
+    .results { display:grid; gap:22px; }
+    .recommendation { padding:24px; background:var(--teal-dark); color:white; min-height:210px; }
+    .eyebrow { color:#9ed8ce; text-transform:uppercase; letter-spacing:.12em; font:700 11px Arial,sans-serif; }
+    .recommendation h2 { margin:10px 0 8px; font-size:30px; line-height:1.1; }
+    .recommendation p { color:#d6eeea; margin:0; max-width:720px; font-size:17px; }
+    .progress-panel { margin-top:22px; padding-top:16px; border-top:1px solid rgba(255,255,255,.18); }
+    .progress-panel[hidden] { display:none; }
+    .progress-head { display:flex; justify-content:space-between; gap:16px; color:#d6eeea; font:700 12px Arial,sans-serif; }
+    .progress-percent { color:#9ed8ce; }
+    .progress-track { height:5px; overflow:hidden; margin-top:9px; background:rgba(255,255,255,.16); border-radius:5px; }
+    .progress-fill { display:block; width:0; height:100%; background:#e8c36a; border-radius:5px; transition:width .35s ease; }
+    .reasoning-line { display:flex; align-items:center; gap:9px; min-height:25px; margin-top:9px; color:#b7e3db; font-size:13px; }
+    .thinking-dots { display:inline-flex; gap:3px; }
+    .thinking-dots i { width:4px; height:4px; border-radius:50%; background:#b7e3db; animation:thinking 1.1s infinite ease-in-out; }
+    .thinking-dots i:nth-child(2) { animation-delay:.15s; }
+    .thinking-dots i:nth-child(3) { animation-delay:.3s; }
+    .progress-panel.complete .thinking-dots { display:none; }
+    .progress-panel.complete .progress-fill { background:#9ed8ce; }
+    @keyframes thinking { 0%,60%,100% { opacity:.25; transform:translateY(0); } 30% { opacity:1; transform:translateY(-3px); } }
+    .stage-list { display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; list-style:none; padding:0; }
+    .stage-list li { color:rgba(214,238,234,.55); font:11px Arial,sans-serif; }
+    .stage-list li:not(:last-child)::after { content:"/"; margin-left:7px; color:rgba(214,238,234,.35); }
+    .stage-list li.active { color:#fff; }
+    .stage-list li.done { color:#9ed8ce; }
+    .route { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:22px; font-family:Arial,sans-serif; font-size:13px; }
+    .route span { padding:7px 10px; background:rgba(255,255,255,.13); border-radius:4px; }
+    .arrow { color:#9ed8ce; }
+    .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .metric { padding:18px; min-height:112px; }
+    .metric .value { display:block; margin-top:8px; font:700 28px Arial,sans-serif; }
+    .metric small { color:var(--muted); font-family:Arial,sans-serif; }
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+    .detail { padding:20px; }
+    .detail h3 { margin:0 0 12px; font-size:19px; }
+    .detail p { margin:0; color:var(--muted); }
+    .arabic { direction:rtl; text-align:right; font-size:20px; line-height:1.8; }
+    .incident { color:var(--red) !important; }
+    .traffic { padding:20px; }
+    .traffic-list { display:grid; gap:9px; font-family:Arial,sans-serif; font-size:13px; }
+    .traffic-row { display:grid; grid-template-columns:1.6fr 1fr 1fr; gap:8px; padding:9px 0; border-bottom:1px solid #edf1ed; }
+    .traffic-row span:last-child { text-align:right; color:var(--muted); }
+    .loading { color:#9ed8ce; font-family:Arial,sans-serif; }
+    @media (max-width:800px) { .grid, .detail-grid { grid-template-columns:1fr; } .controls { position:static; } .metrics { grid-template-columns:1fr 1fr; } header { align-items:flex-start; } }
+    @media (max-width:480px) { .shell { padding:20px 14px 40px; } .metrics { grid-template-columns:1fr; } .recommendation h2 { font-size:25px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header><div class="brand"><span class="mark">M</span> Masar</div><div class="status"><span class="dot"></span> Local operations console</div></header>
+    <section class="intro"><h1>A clearer route through the city.</h1><p>Read the conditions, compare the options, and leave with a commute recommendation that makes sense.</p></section>
+    <div class="grid">
+      <form class="panel controls" id="trip-form">
+        <h2 class="panel-title">Plan a trip <span style="font-size:12px;color:var(--muted);font-family:Arial">Dubai</span></h2>
+        <label for="origin">From</label><select id="origin"><option>Marina</option><option>Sheikh Zayed Road</option><option>Al Khail</option><option>Business Bay</option><option>Airport</option></select>
+        <label for="destination">To</label><select id="destination"><option>Business Bay</option><option>Marina</option><option>Sheikh Zayed Road</option><option>Al Khail</option><option>Airport</option></select>
+        <div class="field-row"><div><label for="speed">Current speed</label><input id="speed" type="number" value="20" min="0"></div><div><label for="free-flow">Free-flow speed</label><input id="free-flow" type="number" value="90" min="1"></div></div>
+        <div class="field-row"><div><label for="temperature">Temperature</label><input id="temperature" type="number" value="40"></div><div><label for="weather">Weather</label><select id="weather"><option>Clear</option><option>Cloudy</option><option>Rain</option></select></div></div>
+        <div class="switch-row"><span>Use live traffic conditions</span><label class="switch"><input id="use-live-traffic" type="checkbox" checked><span class="slider"></span></label></div>
+        <div class="switch-row"><span>Use live Groq reasoning</span><label class="switch"><input id="live" type="checkbox"><span class="slider"></span></label></div>
+        <button class="primary" type="submit">Build recommendation</button>
+      </form>
+      <section class="results">
+        <article class="panel recommendation"><div class="eyebrow" id="mode-label">Recommended commute</div><p id="data-source" style="color:#9ed8ce;font:700 12px Arial,sans-serif;margin:4px 0 0;"></p><h2 id="recommendation-title">Your next move will appear here.</h2><p id="message-en">Set your trip details and build a recommendation.</p><div class="progress-panel" id="progress-panel" hidden><div class="progress-head"><span id="progress-label">Preparing Masar</span><span class="progress-percent" id="progress-percent">0%</span></div><div class="progress-track"><span class="progress-fill" id="progress-fill"></span></div><div class="reasoning-line"><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="reasoning-text" aria-live="polite">Reading the current conditions</span></div><ul class="stage-list" aria-label="Recommendation stages"><li data-stage="0">Traffic</li><li data-stage="1">Prediction</li><li data-stage="2">Route</li><li data-stage="3">Guidance</li></ul></div><div class="route" id="route"></div></article>
+        <div class="metrics"><article class="panel metric"><small>Predicted congestion</small><span class="value" id="congestion">--</span><small id="confidence">Confidence --</small></article><article class="panel metric"><small>Road speed</small><span class="value" id="road-speed">--</span><small>km/h current flow</small></article><article class="panel metric"><small>Temperature</small><span class="value" id="temp">--</span><small>Dubai conditions</small></article></div>
+        <div class="detail-grid"><article class="panel detail"><h3>Traffic context</h3><p id="context">No context loaded yet.</p><p class="incident" id="incident"></p></article><article class="panel detail"><h3>Arabic guidance</h3><p class="arabic" id="message-ar">ستظهر التوصية هنا.</p></article></div>
+        <article class="panel traffic"><h3 class="panel-title">Latest traffic signals <button type="button" id="refresh-traffic" style="border:0;background:none;color:var(--teal);cursor:pointer">Refresh</button></h3><div class="traffic-list" id="traffic-list"><div class="loading">Loading Supabase snapshot...</div></div></article>
+      </section>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const form = $("trip-form");
+    let progressTimer;
+    const progressMessages = ["Reading the current conditions", "Estimating congestion and confidence", "Comparing route and travel modes", "Composing your commute guidance"];
+    function updateProgress(percent, stage, message) {
+      $("progress-fill").style.width = `${percent}%`;
+      $("progress-percent").textContent = `${Math.round(percent)}%`;
+      $("progress-label").textContent = percent >= 100 ? "Recommendation ready" : "Masar is working";
+      $("reasoning-text").textContent = message;
+      document.querySelectorAll("[data-stage]").forEach((item) => {
+        const itemStage = Number(item.dataset.stage);
+        item.classList.toggle("done", itemStage < stage || percent >= 100);
+        item.classList.toggle("active", itemStage === stage && percent < 100);
+      });
+    }
+    function startProgress(live) {
+      const panel = $("progress-panel");
+      panel.hidden = false;
+      panel.classList.remove("complete");
+      let percent = 8;
+      updateProgress(percent, 0, progressMessages[0]);
+      clearInterval(progressTimer);
+      progressTimer = setInterval(() => {
+        percent = Math.min(percent + (live ? 1 : 3), live ? 91 : 88);
+        const stage = percent < 27 ? 0 : percent < 52 ? 1 : percent < 76 ? 2 : 3;
+        updateProgress(percent, stage, progressMessages[stage]);
+      }, live ? 180 : 100);
+    }
+    function finishProgress() {
+      clearInterval(progressTimer);
+      updateProgress(100, 3, "Your route, mode, and guidance are ready");
+      $("progress-panel").classList.add("complete");
+    }
+    function formatAge(seconds) {
+      if (seconds == null) return "";
+      const minutes = Math.round(seconds / 60);
+      if (minutes < 1) return "just now";
+      if (minutes === 1) return "1 min ago";
+      if (minutes < 60) return `${minutes} min ago`;
+      const hours = Math.round(minutes / 60);
+      return hours === 1 ? "1 hr ago" : `${hours} hr ago`;
+    }
+    function render(result) {
+      const route = result.recommended_route || [];
+      const mode = (result.recommended_mode || "drive").replaceAll("_", " ");
+      $("mode-label").textContent = mode;
+      if (result.used_live_traffic) {
+        const age = formatAge(result.live_traffic_age_seconds);
+        $("data-source").textContent = `Live traffic data for ${result.location || "this route"}${age ? ` · ${age}` : ""}`;
+      } else {
+        $("data-source").textContent = result.live_traffic_error
+          ? "Manually entered values (live traffic unavailable)"
+          : "Manually entered values";
+      }
+      $("recommendation-title").textContent = mode === "metro" ? "Take the metro today." : mode === "drive to metro" ? "Drive part-way, then switch." : "Driving is the best fit.";
+      $("message-en").textContent = result.message_en || "Recommendation ready.";
+      $("message-ar").textContent = result.message_ar || "تم تجهيز التوصية.";
+      $("context").textContent = result.context_notes || "Conditions look normal for this time.";
+      if (result.used_fallback) {
+        $("context").textContent += " Live Groq reasoning was temporarily unavailable, so this result uses the local route logic.";
+      }
+      $("incident").textContent = (result.incidents || []).join(" ");
+      $("congestion").textContent = `${Math.round((result.predicted_congestion || 0) * 100)}%`;
+      $("confidence").textContent = `Confidence ${Math.round((result.prediction_confidence || 0) * 100)}%`;
+      $("road-speed").textContent = `${result.current_speed || "--"}`;
+      $("temp").textContent = `${result.temperature || "--"}°`;
+      $("route").innerHTML = route.map((place, index) => `<span>${place}</span>${index < route.length - 1 ? '<b class="arrow">→</b>' : ''}`).join("");
+    }
+    async function requestRecommendation(payload, signal) {
+      const response = await fetch("/api/recommend", { method:"POST", signal, headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "The recommendation failed.");
+      return data.result;
+    }
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = form.querySelector("button[type='submit']");
+      const live = $("live").checked;
+      const speed = Number($("speed").value); const freeFlow = Number($("free-flow").value);
+      const payload = { origin:$("origin").value, destination:$("destination").value, current_speed:speed, free_flow_speed:freeFlow, temperature:Number($("temperature").value), weather_condition:$("weather").value, is_raining:$("weather").value === "Rain", use_live_traffic:$("use-live-traffic").checked };
+      button.disabled = true;
+      button.textContent = live ? "Preparing local result..." : "Calculating...";
+      startProgress(live);
+      try {
+        const localResult = await requestRecommendation({ ...payload, demo:true });
+        render(localResult);
+        if (live) {
+          $("recommendation-title").textContent = "Local result ready; refining with Groq...";
+          button.textContent = "Asking Groq...";
+          updateProgress(55, 2, "Comparing route and travel modes");
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 30000);
+          try {
+            render(await requestRecommendation({ ...payload, demo:false }, controller.signal));
+            finishProgress();
+          } catch (error) {
+            $("context").textContent += " Live Groq reasoning was unavailable, so the local result remains active.";
+            finishProgress();
+          } finally {
+            clearTimeout(timeout);
+          }
+        }
+      } catch (error) {
+        $("recommendation-title").textContent = "The recommendation could not be completed.";
+        $("message-en").textContent = error.message;
+        finishProgress();
+      } finally {
+        button.disabled = false;
+        button.textContent = "Build recommendation";
+      }
+    });
+    async function loadTraffic() { const response = await fetch("/api/traffic"); const data = await response.json(); const rows = data.rows || []; $("traffic-list").innerHTML = rows.length ? rows.map(row => `<div class="traffic-row"><strong>${row.location_name || "Unknown"}</strong><span>${row.current_speed || "--"} km/h</span><span>${row.weather_main || "--"}</span></div>`).join("") : `<div class="loading">No traffic rows available.</div>`; }
+    $("refresh-traffic").addEventListener("click", loadTraffic); loadTraffic();
+  </script>
+</body>
+</html>

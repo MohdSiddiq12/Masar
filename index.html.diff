@@ -1,0 +1,55 @@
+diff --git a/frontend/index.html b/frontend/index.html
+index 99acda5..fcf9e50 100644
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -92,11 +92,12 @@
+         <label for="destination">To</label><select id="destination"><option>Business Bay</option><option>Marina</option><option>Sheikh Zayed Road</option><option>Al Khail</option><option>Airport</option></select>
+         <div class="field-row"><div><label for="speed">Current speed</label><input id="speed" type="number" value="20" min="0"></div><div><label for="free-flow">Free-flow speed</label><input id="free-flow" type="number" value="90" min="1"></div></div>
+         <div class="field-row"><div><label for="temperature">Temperature</label><input id="temperature" type="number" value="40"></div><div><label for="weather">Weather</label><select id="weather"><option>Clear</option><option>Cloudy</option><option>Rain</option></select></div></div>
++        <div class="switch-row"><span>Use live traffic conditions</span><label class="switch"><input id="use-live-traffic" type="checkbox" checked><span class="slider"></span></label></div>
+         <div class="switch-row"><span>Use live Groq reasoning</span><label class="switch"><input id="live" type="checkbox"><span class="slider"></span></label></div>
+         <button class="primary" type="submit">Build recommendation</button>
+       </form>
+       <section class="results">
+-        <article class="panel recommendation"><div class="eyebrow" id="mode-label">Recommended commute</div><h2 id="recommendation-title">Your next move will appear here.</h2><p id="message-en">Set your trip details and build a recommendation.</p><div class="progress-panel" id="progress-panel" hidden><div class="progress-head"><span id="progress-label">Preparing Masar</span><span class="progress-percent" id="progress-percent">0%</span></div><div class="progress-track"><span class="progress-fill" id="progress-fill"></span></div><div class="reasoning-line"><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="reasoning-text" aria-live="polite">Reading the current conditions</span></div><ul class="stage-list" aria-label="Recommendation stages"><li data-stage="0">Traffic</li><li data-stage="1">Prediction</li><li data-stage="2">Route</li><li data-stage="3">Guidance</li></ul></div><div class="route" id="route"></div></article>
++        <article class="panel recommendation"><div class="eyebrow" id="mode-label">Recommended commute</div><p id="data-source" style="color:#9ed8ce;font:700 12px Arial,sans-serif;margin:4px 0 0;"></p><h2 id="recommendation-title">Your next move will appear here.</h2><p id="message-en">Set your trip details and build a recommendation.</p><div class="progress-panel" id="progress-panel" hidden><div class="progress-head"><span id="progress-label">Preparing Masar</span><span class="progress-percent" id="progress-percent">0%</span></div><div class="progress-track"><span class="progress-fill" id="progress-fill"></span></div><div class="reasoning-line"><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="reasoning-text" aria-live="polite">Reading the current conditions</span></div><ul class="stage-list" aria-label="Recommendation stages"><li data-stage="0">Traffic</li><li data-stage="1">Prediction</li><li data-stage="2">Route</li><li data-stage="3">Guidance</li></ul></div><div class="route" id="route"></div></article>
+         <div class="metrics"><article class="panel metric"><small>Predicted congestion</small><span class="value" id="congestion">--</span><small id="confidence">Confidence --</small></article><article class="panel metric"><small>Road speed</small><span class="value" id="road-speed">--</span><small>km/h current flow</small></article><article class="panel metric"><small>Temperature</small><span class="value" id="temp">--</span><small>Dubai conditions</small></article></div>
+         <div class="detail-grid"><article class="panel detail"><h3>Traffic context</h3><p id="context">No context loaded yet.</p><p class="incident" id="incident"></p></article><article class="panel detail"><h3>Arabic guidance</h3><p class="arabic" id="message-ar">ستظهر التوصية هنا.</p></article></div>
+         <article class="panel traffic"><h3 class="panel-title">Latest traffic signals <button type="button" id="refresh-traffic" style="border:0;background:none;color:var(--teal);cursor:pointer">Refresh</button></h3><div class="traffic-list" id="traffic-list"><div class="loading">Loading Supabase snapshot...</div></div></article>
+@@ -137,10 +138,27 @@
+       updateProgress(100, 3, "Your route, mode, and guidance are ready");
+       $("progress-panel").classList.add("complete");
+     }
++    function formatAge(seconds) {
++      if (seconds == null) return "";
++      const minutes = Math.round(seconds / 60);
++      if (minutes < 1) return "just now";
++      if (minutes === 1) return "1 min ago";
++      if (minutes < 60) return `${minutes} min ago`;
++      const hours = Math.round(minutes / 60);
++      return hours === 1 ? "1 hr ago" : `${hours} hr ago`;
++    }
+     function render(result) {
+       const route = result.recommended_route || [];
+       const mode = (result.recommended_mode || "drive").replaceAll("_", " ");
+       $("mode-label").textContent = mode;
++      if (result.used_live_traffic) {
++        const age = formatAge(result.live_traffic_age_seconds);
++        $("data-source").textContent = `Live traffic data for ${result.location || "this route"}${age ? ` · ${age}` : ""}`;
++      } else {
++        $("data-source").textContent = result.live_traffic_error
++          ? "Manually entered values (live traffic unavailable)"
++          : "Manually entered values";
++      }
+       $("recommendation-title").textContent = mode === "metro" ? "Take the metro today." : mode === "drive to metro" ? "Drive part-way, then switch." : "Driving is the best fit.";
+       $("message-en").textContent = result.message_en || "Recommendation ready.";
+       $("message-ar").textContent = result.message_ar || "تم تجهيز التوصية.";
+@@ -166,7 +184,7 @@
+       const button = form.querySelector("button[type='submit']");
+       const live = $("live").checked;
+       const speed = Number($("speed").value); const freeFlow = Number($("free-flow").value);
+-      const payload = { origin:$("origin").value, destination:$("destination").value, current_speed:speed, free_flow_speed:freeFlow, temperature:Number($("temperature").value), weather_condition:$("weather").value, is_raining:$("weather").value === "Rain" };
++      const payload = { origin:$("origin").value, destination:$("destination").value, current_speed:speed, free_flow_speed:freeFlow, temperature:Number($("temperature").value), weather_condition:$("weather").value, is_raining:$("weather").value === "Rain", use_live_traffic:$("use-live-traffic").checked };
+       button.disabled = true;
+       button.textContent = live ? "Preparing local result..." : "Calculating...";
+       startProgress(live);
