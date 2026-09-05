@@ -18,6 +18,8 @@ class MasarState(TypedDict):
     prediction_confidence: Optional[float]
     is_anomaly: bool
     route_path: Literal["fast", "deep"]
+    origin: Optional[str]
+    destination: Optional[str]
     context_notes: Optional[str]
     nearby_events: Annotated[list[str], operator.add]
     social_signal: Optional[str]

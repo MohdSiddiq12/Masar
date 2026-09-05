@@ -43,7 +43,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "Starting collection at $(date -u)"
-          python collect_traffic.py
+          python -m scripts.collect_traffic
           echo "Collection finished at $(date -u)"
 
       - name: Collect Reddit chatter
@@ -57,4 +57,4 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python collect_chatter.py
+        run: python -m scripts.collect_chatter

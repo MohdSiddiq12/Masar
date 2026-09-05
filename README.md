@@ -1,112 +1,63 @@
-# Masar
+# Masar (مسار) — Dubai Road-Congestion & Multi-Modal Commute Agent
 
-Masar is a Dubai traffic intelligence prototype. It collects road-flow and weather data, stores the observations in Supabase, gathers relevant public Reddit chatter, and predicts congestion with a scikit-learn model or a lightweight heuristic fallback.
+A LangGraph multi-agent system that predicts road congestion for key Dubai
+corridors and recommends drive / metro / drive-to-metro, with bilingual
+(English/Arabic) output. Built as a Dubai-specific reframe of the classic
+"predict transit delay" project: Dubai Metro is famously punctual, so the
+real local pain point is road congestion and mode choice, not transit
+reliability.
 
-## Features
+## Architecture
 
-- Collects traffic flow from TomTom for selected Dubai locations.
-- Collects weather conditions from OpenWeather.
-- Stores traffic observations in Supabase table `traffic_logs`.
-- Collects recent traffic-related posts from `r/dubai` and stores them in `reddit_chatter`.
-- Converts traffic rows into a shared feature vector for model training and prediction.
-- Uses a trained model when available and falls back to a low-confidence heuristic when it is not.
-- Defines a shared `MasarState` contract for downstream graph nodes and bilingual recommendations.
-
-## Project Layout
-
-```text
-.
-├── scripts/
-│   ├── collect_traffic.py   # TomTom and OpenWeather collection
-│   ├── collect_chatter.py   # Reddit collection and Supabase upserts
-│   ├── train_model.py       # Train and save the congestion classifier
-│   ├── check_env.py         # Check whether environment variables are loaded
-│   ├── test_database_insert.py # Manual Supabase write check
-│   └── test_groq.py         # Manual Groq API check
-├── predictor.py             # Compatibility export for predictor_node
-├── state.py                 # Compatibility export for MasarState
-├── sql/
-│   └── supabase_reddit_chatter.sql
-├── masar/
-│   ├── features.py          # Feature order and row transformations
-│   ├── state.py             # Shared TypedDict state contract
-│   └── nodes/predictor.py   # Model-backed predictor node
-└── tests/
-    └── test_predictor.py
+```
+Predictor  →  Router  →  (fast: straight to Optimizer)
+                       →  (deep: Context agent → Optimizer)
+                                                    ↓
+                                              Synthesis (EN/AR)
 ```
 
-## Requirements
+- **Predictor** — XGBoost classifier if a trained model exists, otherwise
+  a heuristic that deliberately reports low confidence so the Router
+  correctly sends traffic through Context until a real model is trained.
+- **Router** — reads confidence, uses LangGraph's `Command` to route
+  dynamically. Missing confidence fails safe toward the deep path.
+- **Context** — LLM reasoning over available signal (incidents, weather).
+  Social/events lookups are honest stubs pending Reddit (paused) and an
+  events API (not yet wired).
+- **Route Optimizer** — NetworkX Dijkstra over an interim hand-built graph
+  of the 5 monitored corridors. Real RTA network topology was never
+  confirmed as integrated — this is a known, documented placeholder.
+- **Synthesis** — structured bilingual output via Pydantic + LLM.
 
-- Python 3.12 or newer recommended
-- A Supabase project
-- TomTom Traffic API key
-- OpenWeather API key
-- Groq API key only if you run `test_groq.py`
+Every LLM-calling node accepts an optional `llm` parameter — production
+omits it and gets a real Groq client; tests inject a fake and verify
+logic with zero network calls.
 
-Install the dependencies in the active virtual environment:
+## Data pipeline
 
-```powershell
-python -m pip install -r requirements.txt
+```
+TomTom + OpenWeatherMap → scripts/collect_traffic.py → Supabase (traffic_logs)
+   (continuous, every 10 min via GitHub Actions)
+
+Supabase → scripts/train_model.py → models/congestion_xgb.pkl
+   (periodic — run manually until there's a real retraining cadence)
 ```
 
-## Configuration
+## Setup
 
-Create a `.env` file in the project root. Do not commit this file.
-
-```dotenv
-TOMTOM_API_KEY=your_tomtom_api_key
-OPENWEATHER_API_KEY=your_openweather_api_key
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_supabase_key
-REDDIT_USER_AGENT=python:masar:v1.0 (by /u/your_reddit_username)
-GROQ_API_KEY=your_groq_api_key
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Run the environment check before making API requests:
+Environment variables needed: `SUPABASE_URL`, `SUPABASE_KEY`,
+`GROQ_API_KEY`, `TOMTOM_API_KEY`, `OPENWEATHER_API_KEY`.
+`MASAR_MODEL_PATH` optionally overrides the default `models/congestion_xgb.pkl`.
 
-```powershell
-python -m scripts.check_env
-```
+## Manual Supabase Check
 
-The check prints only a shortened representation of secret values. Treat the output as sensitive nonetheless.
-
-## Supabase Setup
-
-Run [sql/supabase_reddit_chatter.sql](sql/supabase_reddit_chatter.sql) in the Supabase SQL editor to create the `reddit_chatter` table.
-
-The traffic collector expects a `traffic_logs` table with at least these columns:
-
-| Column | Description |
-| --- | --- |
-| `location_name` | Named Dubai location |
-| `lat`, `lon` | Coordinates |
-| `current_speed` | Current road speed in km/h |
-| `free_flow_speed` | Expected free-flow speed in km/h |
-| `speed_ratio` | Current speed divided by free-flow speed |
-| `delay_seconds` | Current travel-time delay |
-| `weather_main` | OpenWeather condition category |
-| `rain_mm` | Rainfall amount |
-| `raw_data` | Original TomTom and OpenWeather payloads as JSON |
-
-## Collect Data
-
-Collect traffic and weather observations for the configured Dubai locations:
-
-```powershell
-python -m scripts.collect_traffic
-```
-
-Collect matching Reddit posts from the previous 24 hours:
-
-```powershell
-python -m scripts.collect_chatter
-```
-
-Both collectors require network access and valid Supabase credentials. The Reddit collector skips storage when credentials are missing; the traffic collector raises an error if no rows are stored.
-
-## View Stored Data
-
-Use this read-only snippet to inspect the latest rows from both Supabase tables:
+Run this read-only snippet from the repository root after creating `.env`:
 
 ```python
 import os
@@ -116,95 +67,154 @@ from dotenv import load_dotenv
 from supabase import create_client
 
 load_dotenv()
-
-supabase = create_client(
-    os.environ["SUPABASE_URL"],
-    os.environ["SUPABASE_KEY"],
-)
+client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 
 traffic = (
-    supabase.table("traffic_logs")
-    .select("*")
-    .order("created_at", desc=True)
-    .limit(10)
-    .execute()
+  client.table("traffic_logs")
+  .select("location_name,current_speed,free_flow_speed,speed_ratio,weather_main,rain_mm")
+  .limit(10)
+  .execute()
 )
-
 chatter = (
-    supabase.table("reddit_chatter")
-    .select("reddit_id,title,score,post_url,published_at,snippet")
-    .order("published_at", desc=True)
-    .limit(10)
-    .execute()
+  client.table("reddit_chatter")
+  .select("reddit_id,title,score,post_url,published_at")
+  .order("published_at", desc=True)
+  .limit(10)
+  .execute()
 )
 
 print("Latest traffic rows:")
 pprint(traffic.data)
-
 print("\nLatest Reddit chatter:")
 pprint(chatter.data)
 ```
 
-Save it as `view_data.py` or paste it into a Python session, then run:
+Save it as `view_data.py`, then run:
 
 ```powershell
-python view_data.py
+.\VE\Scripts\python.exe view_data.py
 ```
 
-If `traffic_logs` does not have a `created_at` column, order by an available timestamp column or remove the `.order(...)` call.
+This only performs `select` queries; it does not insert or update data.
 
-## Train the Model
+## Manual Component Check
 
-Train on deterministic synthetic history without requiring Supabase traffic rows:
+This snippet exercises the predictor, router, context, route optimizer, and
+bilingual synthesis without network calls:
+
+```python
+import masar.nodes.predictor as predictor_module
+from masar.graph import build_graph
+from masar.nodes.synthesis import SynthesisOutput
+
+
+class ContextLLM:
+  def invoke(self, prompt):
+    return type("Response", (), {"content": "Traffic context was reviewed."})()
+
+
+class SynthesisLLM:
+  def invoke(self, prompt):
+    return SynthesisOutput(
+      message_en="Use the recommended route.",
+      message_ar="استخدم المسار الموصى به.",
+    )
+
+
+predictor_module.MODEL_PATH = "missing-model.pkl"
+predictor_module._model = None
+predictor_module._model_checked = False
+
+state = {
+  "location": "Sheikh Zayed Road",
+  "timestamp": "2026-09-05T18:00:00Z",
+  "current_speed": 40.0,
+  "free_flow_speed": 100.0,
+  "congestion_ratio": 0.4,
+  "incidents": ["Minor collision"],
+  "temperature": 38.0,
+  "weather_condition": "Clear",
+  "is_raining": False,
+  "predicted_congestion": None,
+  "prediction_confidence": None,
+  "is_anomaly": False,
+  "route_path": "fast",
+  "origin": "Marina",
+  "destination": "Business Bay",
+  "context_notes": None,
+  "nearby_events": [],
+  "social_signal": None,
+  "recommended_mode": None,
+  "recommended_route": [],
+  "message_en": None,
+  "message_ar": None,
+}
+
+result = build_graph(ContextLLM(), SynthesisLLM()).invoke(state)
+for key in (
+  "predicted_congestion",
+  "prediction_confidence",
+  "route_path",
+  "context_notes",
+  "recommended_mode",
+  "recommended_route",
+  "message_en",
+  "message_ar",
+):
+  print(f"{key}: {result.get(key)}")
+```
+
+Save it as `manual_components.py`, then run:
 
 ```powershell
-python -m scripts.train_model
+.\VE\Scripts\python.exe manual_components.py
 ```
 
-By default, the model is saved to `models/congestion_xgb.pkl` (the filename is retained for compatibility even though the current implementation uses `RandomForestClassifier`).
+## Run GitHub Actions From the CLI
 
-Include collected traffic rows alongside synthetic rows:
+After installing and authenticating GitHub CLI, dispatch the traffic workflow
+on the `testing` branch:
 
 ```powershell
-python -m scripts.train_model --include-real --synthetic-rows 200
+gh auth login
+gh workflow run collect_traffic.yml --ref testing
+gh run list --workflow collect_traffic.yml --branch testing --limit 1
+gh run watch RUN_ID --exit-status
 ```
 
-Train only on real Supabase rows:
+Replace `RUN_ID` with the run ID printed by `gh run list`. The workflow needs
+the repository secrets `TOMTOM_API_KEY`, `OPENWEATHER_API_KEY`,
+`SUPABASE_URL`, and `SUPABASE_KEY`.
 
-```powershell
-python -m scripts.train_model --real-only
+## Running tests
+
+```bash
+python -m pytest -v
 ```
 
-Use a custom model path:
+15 tests across the component and graph test files, all isolated — no
+network access is required to run the full suite. Each node is tested
+standalone before the graph tests exercise both the fast and deep paths.
 
-```powershell
-python -m scripts.train_model --output models/my_model.pkl
+## Training the model
+
+```bash
+python -m scripts.train_model --synthetic-rows 2000   # synthetic only
+python -m scripts.train_model --include-real          # + your Supabase data
+python -m scripts.train_model --real-only             # Supabase data only
 ```
 
-Set `MASAR_MODEL_PATH` when loading a custom model:
+**Known limitation:** as of this build, real Supabase coverage is ~81 rows
+(roughly a day and a half) — not enough for the per-location/hour baseline
+label to be meaningful yet. `--include-real` and `--real-only` are wired
+correctly but haven't been exercised against live data in every
+environment. Realistic target before retraining on real data alone:
+2–3 weeks of coverage.
 
-```powershell
-$env:MASAR_MODEL_PATH = "models/my_model.pkl"
-```
+## Known gaps (tracked deliberately, not accidentally)
 
-The classifier labels a row as congested when its speed ratio is below `0.7`. The shared feature order is:
-
-```text
-current_speed, free_flow_speed, congestion_ratio, temperature, is_raining
-```
-
-## Tests
-
-Run the predictor tests:
-
-```powershell
-python -m pytest
-```
-
-The predictor tests force the no-model path, so they do not need a trained model or API credentials.
-
-## Notes
-
-- `scripts/test_database_insert.py` performs a real insert into `traffic_logs`; use it only when you intentionally want to test database writes.
-- `scripts/test_groq.py` makes a real Groq request and requires `GROQ_API_KEY`.
-- API responses are retained under `raw_data`; review Supabase retention and access policies before using production data.
+- Reddit social signal: paused (public JSON endpoint blocked) — PRAW +
+  OAuth is the known fix
+- Route Optimizer topology: hand-built placeholder graph, not real RTA
+  network data
+- No backend/frontend/deployment yet — this is the agent core only

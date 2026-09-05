@@ -4,6 +4,7 @@ venv/
 env/
 .env
 models/
+files.zip
 *.py[cod]
 __pycache__/VE/
 .env

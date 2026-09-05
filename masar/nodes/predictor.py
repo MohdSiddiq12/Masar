@@ -25,7 +25,11 @@ def _load_model():
 
 
 def _build_feature_vector(state: MasarState) -> np.ndarray:
-    return np.array([[state[name] for name in FEATURE_ORDER],])
+    values = []
+    for feature in FEATURE_ORDER:
+        value = state[feature]
+        values.append(float(value) if isinstance(value, bool) else value)
+    return np.array([values])
 
 
 def _heuristic_predict(state: MasarState) -> tuple[float, float]:
