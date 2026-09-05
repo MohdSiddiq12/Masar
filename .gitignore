@@ -3,6 +3,7 @@ venv/
 .venv/
 env/
 .env
+models/
 *.py[cod]
 __pycache__/VE/
 .env
