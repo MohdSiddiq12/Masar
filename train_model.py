@@ -28,7 +28,7 @@ import pandas as pd
 from sklearn.metrics import classification_report
 from xgboost import XGBClassifier
 
-from masar.features import FEATURE_ORDER
+from masar.features import FEATURE_ORDER, row_to_features
 
 LOCATIONS = ["Sheikh Zayed Road", "Al Khail", "Business Bay", "Marina", "Airport"]
 ANOMALY_Z_THRESHOLD = 1.5
@@ -79,19 +79,28 @@ def fetch_real_rows() -> pd.DataFrame:
     map against a real row before trusting it -- e.g. your table may
     store `speed_ratio` where this expects `congestion_ratio`.
     """
+    from dotenv import load_dotenv
     from supabase import create_client
 
+    load_dotenv()
     client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
     response = client.table("traffic_logs").select("*").order("created_at").execute()
     df = pd.DataFrame(response.data)
 
     df = df.rename(columns={
         "created_at": "timestamp",
+        "location_name": "location",
         "speed_ratio": "congestion_ratio",  # confirm this matches your real schema
     })
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
     df["hour"] = df["timestamp"].dt.hour
     df["is_weekend"] = df["timestamp"].dt.dayofweek.isin([4, 5])
+    feature_values = pd.DataFrame(
+        [row_to_features(row) for row in df.to_dict("records")],
+        columns=FEATURE_ORDER,
+        index=df.index,
+    )
+    df[FEATURE_ORDER] = feature_values
     return df
 
 

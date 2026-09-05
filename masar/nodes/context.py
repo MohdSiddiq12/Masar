@@ -28,9 +28,16 @@ def _build_prompt(state: MasarState, social_signal: str, events: list[str]) -> s
 
 def context_node(state: MasarState, llm=None) -> dict:
     if llm is None:
+        import os
+
+        from dotenv import load_dotenv
         from langchain_groq import ChatGroq
 
-        llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
+        load_dotenv()
+        llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+            temperature=0.2,
+        )
 
     social_signal = _get_social_signal(state["location"])
     events = _get_nearby_events(state["location"])

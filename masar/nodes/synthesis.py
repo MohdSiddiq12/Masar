@@ -25,11 +25,16 @@ def _build_prompt(state: MasarState) -> str:
 
 def synthesis_node(state: MasarState, llm=None) -> dict:
     if llm is None:
+        import os
+
+        from dotenv import load_dotenv
         from langchain_groq import ChatGroq
 
-        llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.3).with_structured_output(
-            SynthesisOutput
-        )
+        load_dotenv()
+        llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+            temperature=0.3,
+        ).with_structured_output(SynthesisOutput)
     result = llm.invoke(_build_prompt(state))
     if isinstance(result, dict):
         result = SynthesisOutput.model_validate(result)
