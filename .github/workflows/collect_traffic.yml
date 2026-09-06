@@ -2,8 +2,11 @@ name: Collect Traffic Data
 
 on:
   schedule:
-    - cron: '0 * * * *'              # every hour at minute 0 UTC
+    - cron: '7 * * * *'              # every hour at minute 7 UTC
   workflow_dispatch:                # manual button
+
+permissions:
+  contents: read
 
 concurrency:
   group: traffic-collection
@@ -31,12 +34,23 @@ jobs:
 
       - name: Debug - Check secrets are present
         run: |
-          echo "TOMTOM_API_KEY is set: ${{ secrets.TOMTOM_API_KEY != '' }}"
-          echo "OPENWEATHER_API_KEY is set: ${{ secrets.OPENWEATHER_API_KEY != '' }}"
-          echo "SUPABASE_URL is set: ${{ secrets.SUPABASE_URL != '' }}"
-          echo "SUPABASE_KEY is set: ${{ secrets.SUPABASE_KEY != '' }}"
-          echo "REDDIT_CLIENT_ID is set: ${{ secrets.REDDIT_CLIENT_ID != '' }}"
-          echo "REDDIT_CLIENT_SECRET is set: ${{ secrets.REDDIT_CLIENT_SECRET != '' }}"
+          missing=0
+          for variable in TOMTOM_API_KEY OPENWEATHER_API_KEY SUPABASE_URL SUPABASE_KEY; do
+            if [ -z "${!variable}" ]; then
+              echo "::error::Required secret $variable is missing"
+              missing=1
+            else
+              echo "$variable is set"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+        env:
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
 
       - name: Run collection script
         env:
