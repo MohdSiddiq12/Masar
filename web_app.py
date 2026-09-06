@@ -23,7 +23,7 @@ class DemoContextLLM:
         return type(
             "Response",
             (),
-            {"content": "Heavy traffic is likely related to the reported accident."},
+            {"content": "No active incident data was provided; this recommendation uses the current traffic and weather signals."},
         )()
 
 
@@ -52,9 +52,7 @@ def make_state(payload):
         "current_speed": current_speed,
         "free_flow_speed": free_flow_speed,
         "congestion_ratio": float(payload.get("congestion_ratio", default_ratio)),
-        "incidents": payload.get("incidents") or [
-            "Accident reported near Trade Centre exit"
-        ],
+        "incidents": payload.get("incidents") or [],
         "temperature": float(payload.get("temperature", 40)),
         "weather_condition": payload.get("weather_condition", "Clear"),
         "is_raining": bool(payload.get("is_raining", False)),
@@ -121,12 +119,18 @@ def run_recommendation(payload):
 
 def traffic_snapshot():
     client = _get_supabase_client()
-    response = (
-        client.table("traffic_logs")
-        .select("location_name,current_speed,free_flow_speed,speed_ratio,weather_main,created_at")
-        .order("created_at", desc=True)
-        .limit(8)
-        .execute()
+    from masar.api_report import measured_call
+    response = measured_call(
+        "supabase",
+        "traffic_logs.snapshot",
+        {"table": "traffic_logs", "select": "location_name,current_speed,free_flow_speed,speed_ratio,weather_main,created_at", "order": "created_at desc", "limit": 8},
+        lambda: (
+            client.table("traffic_logs")
+            .select("location_name,current_speed,free_flow_speed,speed_ratio,weather_main,created_at")
+            .order("created_at", desc=True)
+            .limit(8)
+            .execute()
+        ),
     )
     return response.data or []
 

@@ -27,6 +27,7 @@ def _build_prompt(state: MasarState, social_signal: str, events: list[str]) -> s
 
 
 def context_node(state: MasarState, llm=None) -> dict:
+    using_groq = llm is None
     if llm is None:
         import os
 
@@ -41,7 +42,15 @@ def context_node(state: MasarState, llm=None) -> dict:
 
     social_signal = _get_social_signal(state["location"])
     events = _get_nearby_events(state["location"])
-    response = llm.invoke(_build_prompt(state, social_signal, events))
+    from masar.api_report import measured_call
+
+    prompt = _build_prompt(state, social_signal, events)
+    response = measured_call(
+        "groq" if using_groq else "llm",
+        "context.invoke",
+        {"prompt": prompt, "model": getattr(llm, "model_name", None)},
+        lambda: llm.invoke(prompt),
+    )
     notes = response.content if hasattr(response, "content") else str(response)
     return {
         "context_notes": notes,

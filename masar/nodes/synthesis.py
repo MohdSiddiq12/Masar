@@ -24,6 +24,7 @@ def _build_prompt(state: MasarState) -> str:
 
 
 def synthesis_node(state: MasarState, llm=None) -> dict:
+    using_groq = llm is None
     if llm is None:
         import os
 
@@ -35,7 +36,15 @@ def synthesis_node(state: MasarState, llm=None) -> dict:
             model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
             temperature=0.3,
         ).with_structured_output(SynthesisOutput)
-    result = llm.invoke(_build_prompt(state))
+    from masar.api_report import measured_call
+
+    prompt = _build_prompt(state)
+    result = measured_call(
+        "groq" if using_groq else "llm",
+        "synthesis.invoke",
+        {"prompt": prompt, "model": getattr(llm, "model_name", None)},
+        lambda: llm.invoke(prompt),
+    )
     if isinstance(result, dict):
         result = SynthesisOutput.model_validate(result)
     return {"message_en": result.message_en, "message_ar": result.message_ar}

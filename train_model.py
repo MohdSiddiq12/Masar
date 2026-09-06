@@ -68,24 +68,36 @@ def generate_synthetic_rows(n_rows: int, seed: int = 42) -> pd.DataFrame:
             "is_raining": bool(is_raining),
             "hour": hour,
             "is_weekend": is_weekend,
+            "source": "synthetic",
         })
 
     return pd.DataFrame(rows)
 
 
-def fetch_real_rows() -> pd.DataFrame:
-    """Pulls traffic_logs from Supabase, normalized to this trainer's
-    column names. NOT exercised in this sandbox. Confirm the rename
-    map against a real row before trusting it -- e.g. your table may
-    store `speed_ratio` where this expects `congestion_ratio`.
+def fetch_real_rows(client=None) -> pd.DataFrame:
+    """Read real traffic rows from Supabase without any write operation.
+
+    The optional client makes the read path testable. This function only
+    calls ``select().order().execute()``; synthetic rows never enter the
+    client and are never sent to Supabase.
     """
     from dotenv import load_dotenv
-    from supabase import create_client
+    if client is None:
+        from supabase import create_client
 
-    load_dotenv()
-    client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
-    response = client.table("traffic_logs").select("*").order("created_at").execute()
+        load_dotenv()
+        client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+    from masar.api_report import measured_call
+    response = measured_call(
+        "supabase",
+        "traffic_logs.select",
+        {"table": "traffic_logs", "select": "*", "order": "created_at"},
+        lambda: client.table("traffic_logs").select("*").order("created_at").execute(),
+    )
     df = pd.DataFrame(response.data)
+
+    if df.empty:
+        return pd.DataFrame(columns=[*FEATURE_ORDER, "timestamp", "location", "source"])
 
     df = df.rename(columns={
         "created_at": "timestamp",
@@ -101,7 +113,23 @@ def fetch_real_rows() -> pd.DataFrame:
         index=df.index,
     )
     df[FEATURE_ORDER] = feature_values
+    df["source"] = "real"
     return df
+
+
+def combine_training_data(*frames: pd.DataFrame) -> pd.DataFrame:
+    """Combine local training frames while preserving their provenance.
+
+    This is an in-memory operation. It has no Supabase client and therefore
+    cannot write synthetic or real rows back to the production table.
+    """
+    if not frames:
+        raise ValueError("At least one local training frame is required.")
+    combined = pd.concat(frames, ignore_index=True)
+    sources = set(combined.get("source", pd.Series(dtype=str)).dropna().unique())
+    if not sources.issubset({"real", "synthetic"}):
+        raise ValueError(f"Unexpected training data source(s): {sources}")
+    return combined
 
 
 def label_anomalies(df: pd.DataFrame) -> pd.DataFrame:
@@ -166,7 +194,7 @@ def main():
     if args.include_real or args.real_only:
         frames.append(fetch_real_rows())
 
-    df = pd.concat(frames, ignore_index=True)
+    df = combine_training_data(*frames)
     df = label_anomalies(df)
 
     if df["is_anomaly"].nunique() < 2:

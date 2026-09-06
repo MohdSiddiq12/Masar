@@ -5,6 +5,7 @@ pydantic
 joblib
 numpy
 pandas
+openpyxl
 scikit-learn
 xgboost
 networkx

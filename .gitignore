@@ -4,6 +4,8 @@ venv/
 env/
 .env
 models/
+reports/
+data/~$*
 files.zip
 *.py[cod]
 __pycache__/VE/

@@ -33,11 +33,17 @@ def fetch_dubai_chatter(limit: int = 30) -> list[dict] | None:
     params = {"limit": min(max(limit, 1), 100), "raw_json": 1}
 
     try:
+        import time
+        from masar.api_report import record_call
+        started = time.perf_counter()
         with httpx.Client(timeout=15, headers=headers) as client:
             response = client.get(REDDIT_URL, params=params)
             response.raise_for_status()
             posts = response.json().get("data", {}).get("children", [])
+        record_call("reddit", "new_posts", {"url": REDDIT_URL, "params": params}, {"post_count": len(posts)}, duration_ms=(time.perf_counter() - started) * 1000)
     except httpx.HTTPStatusError as error:
+        from masar.api_report import record_call
+        record_call("reddit", "new_posts", {"url": REDDIT_URL, "params": params}, status="error", error=error)
         print(f"Reddit request failed with HTTP {error.response.status_code}.")
         return None
     except (httpx.RequestError, ValueError) as error:
@@ -89,7 +95,8 @@ def main() -> int:
 
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     for post in posts:
-        supabase.table("reddit_chatter").upsert(post, on_conflict="reddit_id").execute()
+        from masar.api_report import measured_call
+        measured_call("supabase", "reddit_chatter.upsert", {"table": "reddit_chatter", "on_conflict": "reddit_id", "post": post}, lambda: supabase.table("reddit_chatter").upsert(post, on_conflict="reddit_id").execute())
 
     print(f"Stored {len(posts)} posts in reddit_chatter.")
     return len(posts)

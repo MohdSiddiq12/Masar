@@ -1,4 +1,5 @@
 import os
+import time
 import httpx
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -25,9 +26,18 @@ async def get_tomtom_flow(lat: float, lon: float) -> dict:
     params = {"key": TOMTOM_KEY, "point": f"{lat},{lon}", "unit": "KMPH"}
     
     async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url, params=params)
-        r.raise_for_status()
-        data = r.json()["flowSegmentData"]
+        started = time.perf_counter()
+        try:
+            r = await client.get(url, params=params)
+            r.raise_for_status()
+        except Exception as error:
+            from masar.api_report import record_call
+            record_call("tomtom", "traffic_flow", {"url": url, "params": {"point": params["point"], "unit": "KMPH"}}, status="error", duration_ms=(time.perf_counter() - started) * 1000, error=error)
+            raise
+        from masar.api_report import record_call
+        data = r.json()
+        record_call("tomtom", "traffic_flow", {"url": url, "params": {"point": params["point"], "unit": "KMPH"}}, data, duration_ms=(time.perf_counter() - started) * 1000)
+        data = data["flowSegmentData"]
         
         current = data["currentSpeed"]
         free = data["freeFlowSpeed"]
@@ -46,9 +56,18 @@ async def get_weather(lat: float, lon: float) -> dict:
     params = {"lat": lat, "lon": lon, "appid": WEATHER_KEY, "units": "metric"}
     
     async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url, params=params)
-        r.raise_for_status()
+        import time
+        from masar.api_report import record_call
+
+        started = time.perf_counter()
+        try:
+            r = await client.get(url, params=params)
+            r.raise_for_status()
+        except Exception as error:
+            record_call("openweathermap", "current_weather", {"url": url, "params": {"lat": lat, "lon": lon, "units": "metric"}}, status="error", duration_ms=(time.perf_counter() - started) * 1000, error=error)
+            raise
         data = r.json()
+        record_call("openweathermap", "current_weather", {"url": url, "params": {"lat": lat, "lon": lon, "units": "metric"}}, data, duration_ms=(time.perf_counter() - started) * 1000)
         
         rain = data.get("rain", {}).get("1h", 0) or data.get("rain", {}).get("3h", 0) or 0
         return {
@@ -86,7 +105,13 @@ async def collect_and_store():
                     }
                 }
                 
-                supabase.table("traffic_logs").insert(row).execute()
+                from masar.api_report import measured_call
+                measured_call(
+                    "supabase",
+                    "traffic_logs.insert",
+                    {"table": "traffic_logs", "row": row},
+                    lambda: supabase.table("traffic_logs").insert(row).execute(),
+                )
                 successful_rows += 1
                 print(f"✓ {loc['name']} | Speed ratio: {traffic['speed_ratio']} | Rain: {weather['rain_mm']}mm")
                 

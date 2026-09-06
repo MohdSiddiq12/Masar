@@ -20,13 +20,20 @@ def fetch_latest_row(client: Any, location: str) -> Optional[dict]:
     if traffic_key is None:
         return None
 
-    response = (
-        client.table("traffic_logs")
-        .select(TRAFFIC_COLUMNS)
-        .eq("location_name", traffic_key)
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
+    from masar.api_report import measured_call
+
+    response = measured_call(
+        "supabase",
+        "traffic_logs.latest",
+        {"table": "traffic_logs", "location": traffic_key, "select": TRAFFIC_COLUMNS, "order": "created_at desc", "limit": 1},
+        lambda: (
+            client.table("traffic_logs")
+            .select(TRAFFIC_COLUMNS)
+            .eq("location_name", traffic_key)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        ),
     )
     rows = response.data or []
     return rows[0] if rows else None

@@ -90,6 +90,7 @@
         <h2 class="panel-title">Plan a trip <span style="font-size:12px;color:var(--muted);font-family:Arial">Dubai</span></h2>
         <label for="origin">From</label><select id="origin"><option>Marina</option><option>Sheikh Zayed Road</option><option>Al Khail</option><option>Business Bay</option><option>Airport</option></select>
         <label for="destination">To</label><select id="destination"><option>Business Bay</option><option>Marina</option><option>Sheikh Zayed Road</option><option>Al Khail</option><option>Airport</option></select>
+        <div class="switch-row"><span>Use live traffic conditions</span><label class="switch"><input id="live-traffic" type="checkbox" checked><span class="slider"></span></label></div>
         <div class="field-row"><div><label for="speed">Current speed</label><input id="speed" type="number" value="20" min="0"></div><div><label for="free-flow">Free-flow speed</label><input id="free-flow" type="number" value="90" min="1"></div></div>
         <div class="field-row"><div><label for="temperature">Temperature</label><input id="temperature" type="number" value="40"></div><div><label for="weather">Weather</label><select id="weather"><option>Clear</option><option>Cloudy</option><option>Rain</option></select></div></div>
         <div class="switch-row"><span>Use live Groq reasoning</span><label class="switch"><input id="live" type="checkbox"><span class="slider"></span></label></div>
@@ -144,7 +145,10 @@
       $("recommendation-title").textContent = mode === "metro" ? "Take the metro today." : mode === "drive to metro" ? "Drive part-way, then switch." : "Driving is the best fit.";
       $("message-en").textContent = result.message_en || "Recommendation ready.";
       $("message-ar").textContent = result.message_ar || "تم تجهيز التوصية.";
-      $("context").textContent = result.context_notes || "Conditions look normal for this time.";
+      const context = result.context_notes || "Conditions look normal for this time.";
+      const source = result.used_live_traffic ? "Using live traffic and weather data." : "Using manual test values.";
+      const age = result.used_live_traffic && Number.isFinite(result.live_traffic_age_seconds) ? ` Updated ${Math.max(0, Math.round(result.live_traffic_age_seconds / 60))} min ago.` : "";
+      $("context").textContent = `${context} ${source}${age}`;
       if (result.used_fallback) {
         $("context").textContent += " Live Groq reasoning was temporarily unavailable, so this result uses the local route logic.";
       }
@@ -165,8 +169,9 @@
       event.preventDefault();
       const button = form.querySelector("button[type='submit']");
       const live = $("live").checked;
+      const useLiveTraffic = $("live-traffic").checked;
       const speed = Number($("speed").value); const freeFlow = Number($("free-flow").value);
-      const payload = { origin:$("origin").value, destination:$("destination").value, current_speed:speed, free_flow_speed:freeFlow, temperature:Number($("temperature").value), weather_condition:$("weather").value, is_raining:$("weather").value === "Rain" };
+      const payload = { origin:$("origin").value, destination:$("destination").value, current_speed:speed, free_flow_speed:freeFlow, temperature:Number($("temperature").value), weather_condition:$("weather").value, is_raining:$("weather").value === "Rain", use_live_traffic:useLiveTraffic };
       button.disabled = true;
       button.textContent = live ? "Preparing local result..." : "Calculating...";
       startProgress(live);
@@ -188,6 +193,8 @@
           } finally {
             clearTimeout(timeout);
           }
+        } else {
+          finishProgress();
         }
       } catch (error) {
         $("recommendation-title").textContent = "The recommendation could not be completed.";
@@ -198,8 +205,23 @@
         button.textContent = "Build recommendation";
       }
     });
-    async function loadTraffic() { const response = await fetch("/api/traffic"); const data = await response.json(); const rows = data.rows || []; $("traffic-list").innerHTML = rows.length ? rows.map(row => `<div class="traffic-row"><strong>${row.location_name || "Unknown"}</strong><span>${row.current_speed || "--"} km/h</span><span>${row.weather_main || "--"}</span></div>`).join("") : `<div class="loading">No traffic rows available.</div>`; }
-    $("refresh-traffic").addEventListener("click", loadTraffic); loadTraffic();
+    function updateTrafficInputs() {
+      const disabled = $("live-traffic").checked;
+      ["speed", "free-flow", "temperature", "weather"].forEach((id) => { $(id).disabled = disabled; });
+    }
+    $("live-traffic").addEventListener("change", updateTrafficInputs);
+    updateTrafficInputs();
+    async function loadTraffic() {
+      try {
+        const response = await fetch("/api/traffic");
+        const data = await response.json();
+        const rows = data.rows || [];
+        $("traffic-list").innerHTML = rows.length ? rows.map(row => `<div class="traffic-row"><strong>${row.location_name || "Unknown"}</strong><span>${row.current_speed || "--"} km/h</span><span>${row.weather_main || "--"}</span></div>`).join("") : `<div class="loading">No traffic rows available.</div>`;
+      } catch (error) {
+        $("traffic-list").innerHTML = `<div class="loading">Live traffic is temporarily unavailable.</div>`;
+      }
+    }
+    $("refresh-traffic").addEventListener("click", loadTraffic); loadTraffic(); setInterval(loadTraffic, 60000);
   </script>
 </body>
 </html>

@@ -37,10 +37,18 @@ logic with zero network calls.
 
 ```
 TomTom + OpenWeatherMap → scripts/collect_traffic.py → Supabase (traffic_logs)
-   (continuous, every 10 min via GitHub Actions)
+  (continuous, every hour at minute 0 UTC via GitHub Actions)
 
 Supabase → scripts/train_model.py → models/congestion_xgb.pkl
-   (periodic — run manually until there's a real retraining cadence)
+  (local training command; synthetic data is never written to Supabase)
+
+The local web app reads the trained model and serves recommendations:
+
+```
+Browser → web_app.py → Masar graph → predictor → router → optimizer → synthesis
+                    ↓
+              live traffic lookup (optional)
+```
 ```
 
 ## Setup
@@ -54,6 +62,35 @@ pip install -r requirements.txt
 Environment variables needed: `SUPABASE_URL`, `SUPABASE_KEY`,
 `GROQ_API_KEY`, `TOMTOM_API_KEY`, `OPENWEATHER_API_KEY`.
 `MASAR_MODEL_PATH` optionally overrides the default `models/congestion_xgb.pkl`.
+
+The `models/` directory is ignored by Git. Train the model locally before
+starting the UI if `models/congestion_xgb.pkl` does not exist.
+
+## Local Web App
+
+Train from synthetic data and start the local recommendation site:
+
+```powershell
+.\VE\Scripts\python.exe train_model.py --synthetic-rows 6000
+.\VE\Scripts\python.exe web_app.py
+```
+
+Open <http://127.0.0.1:8000>. Live traffic conditions are selected by default;
+manual speed/weather fields become available only when live traffic is turned
+off. The UI displays the selected data source and the age of live traffic.
+Use `demo` mode for local fake LLM responses, or enable live Groq reasoning
+from the UI when `GROQ_API_KEY` is configured.
+
+The API endpoint is `POST /api/recommend`. To force manual/local values from
+PowerShell:
+
+```powershell
+$body = @{ demo=$true; use_live_traffic=$false; origin="Marina"; destination="Business Bay"; current_speed=25; free_flow_speed=90; temperature=36; weather_condition="Clear"; is_raining=$false } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/api/recommend -Method Post -ContentType "application/json" -Body $body
+```
+
+The read-only traffic display is available at `GET /api/traffic`; the latest
+row for one location is available at `GET /api/traffic/latest?location=Marina`.
 
 ## Manual Supabase Check
 
@@ -192,9 +229,93 @@ the repository secrets `TOMTOM_API_KEY`, `OPENWEATHER_API_KEY`,
 python -m pytest -v
 ```
 
-15 tests across the component and graph test files, all isolated — no
-network access is required to run the full suite. Each node is tested
-standalone before the graph tests exercise both the fast and deep paths.
+Run tests through pytest rather than executing a test file directly. Pytest
+adds the repository root to Python's import path, while `python
+tests/test_api_report.py` starts with only `tests/` on the path and cannot
+resolve the `masar` package.
+
+The current suite contains 33 isolated tests. No network access is required
+for the default suite; external calls are replaced with fakes where needed.
+Each node is tested standalone before graph tests exercise both fast and deep
+paths.
+
+## Component and API Reports
+
+Run isolated checks without calling external services:
+
+```powershell
+.\VE\Scripts\python.exe -m scripts.check_components --report-path reports/api_calls.jsonl
+```
+
+The command prints PASS/FAIL results for every component and records the same
+run as JSONL. Each record includes a UTC timestamp, service, operation,
+sanitized request, returned response, duration, status, and error. Groq
+prompts/responses, offline LLM calls, and component function checks are
+included. API keys, tokens, passwords, and authorization values are redacted;
+long values are truncated.
+
+For an explicit Supabase read-only check, add `--include-network`:
+
+```powershell
+.\VE\Scripts\python.exe -m scripts.check_components --include-network --report-path reports/api_calls.jsonl
+```
+
+Traffic collection, Reddit collection, training reads, live-traffic reads,
+and web-app traffic snapshots/inserts also use `MASAR_API_REPORT_PATH` when
+they run. Reports can contain prompts and returned API content, so keep
+`reports/` local even though credentials are redacted.
+
+## Individual Test Files
+
+Run any test from the repository root with pytest. Do not run test files
+directly with `python tests/test_predictor.py`, because that bypasses pytest
+and can cause `ModuleNotFoundError: No module named 'masar'`.
+
+| Test file | What it verifies |
+| --- | --- |
+| `tests/test_predictor.py` | Predictor outputs, probability bounds, fallback heuristic, congestion ordering, and state immutability |
+| `tests/test_router.py` | Low, high, and missing confidence routing |
+| `tests/test_context.py` | Context component output using an injected fake LLM |
+| `tests/test_optimizer.py` | Route calculation, mode thresholds, and unknown endpoints |
+| `tests/test_synthesis.py` | English and Arabic synthesis output |
+| `tests/test_graph.py` | Full LangGraph deep and fast paths |
+| `tests/test_live_traffic.py` | Supabase row mapping, rain/temperature handling, and row age |
+| `tests/test_training_data.py` | Real/synthetic provenance and read-only training boundary |
+| `tests/test_export_synthetic.py` | Excel export row count and synthetic-only contents |
+| `tests/test_api_report.py` | API report fields, response capture, and secret redaction |
+
+Examples:
+
+```powershell
+.\VE\Scripts\python.exe -m pytest tests\test_predictor.py -q
+.\VE\Scripts\python.exe -m pytest tests\test_graph.py -q
+.\VE\Scripts\python.exe -m pytest tests\test_training_data.py -q
+```
+
+Run every test file separately and see which file fails:
+
+```powershell
+Get-ChildItem tests\test_*.py | ForEach-Object {
+  Write-Host "===== $($_.Name) ====="
+  .\VE\Scripts\python.exe -m pytest $_.FullName -q
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+```
+
+Run the complete suite:
+
+```powershell
+.\VE\Scripts\python.exe -m pytest tests\ -q
+```
+
+For input/output explanations rather than only pass counts, use:
+
+```powershell
+.\VE\Scripts\python.exe -m scripts.check_components
+```
+
+That report prints the test input, observed output, and reason each component
+passed. Add `--report-path reports/api_calls.jsonl` to also save call details.
 
 ## Training the model
 
@@ -203,6 +324,55 @@ python -m scripts.train_model --synthetic-rows 2000   # synthetic only
 python -m scripts.train_model --include-real          # + your Supabase data
 python -m scripts.train_model --real-only             # Supabase data only
 ```
+
+Generate a local Excel copy of synthetic data for inspection or import:
+
+```powershell
+.\VE\Scripts\python.exe -m scripts.export_synthetic --rows 6000
+```
+
+This creates `data/synthetic_traffic.xlsx`. It contains synthetic rows only,
+with `source=synthetic`, and never writes to Supabase.
+
+Benchmark the saved model against a majority baseline and the existing
+`1 - congestion_ratio` heuristic:
+
+```powershell
+.\VE\Scripts\python.exe -m scripts.benchmark_model `
+  --rows 6000 `
+  --model models\congestion_xgb.pkl `
+  --output reports\model_benchmark.json
+```
+
+This writes both `reports/model_benchmark.json` and a readable
+`reports/model_benchmark.md`. The current synthetic test result is:
+
+| Benchmark | Accuracy | Balanced accuracy | Precision | Recall | F1 | ROC-AUC | PR-AUC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Majority baseline | 0.925 | 0.500 | 0.000 | 0.000 | 0.000 | 0.500 | 0.075 |
+| Heuristic | 0.807 | 0.656 | 0.189 | 0.478 | 0.270 | 0.858 | 0.386 |
+| XGBoost | 0.928 | 0.925 | 0.509 | 0.922 | 0.656 | 0.982 | 0.871 |
+
+The test contains 6,000 synthetic rows, with 4,800 used for training and
+1,200 held out for testing. There are 90 anomalous rows in the test split.
+Because labels are generated by the synthetic z-score rule, these metrics
+measure how well the model reproduces that rule. They are not evidence of
+future real-world traffic accuracy. Real-only metrics should be reported
+after independently labeled traffic outcomes are available.
+
+The current benchmark is based on 6,000 synthetic rows and compares three
+strategies on 1,200 held-out rows:
+
+- Majority baseline: accuracy 0.925, balanced accuracy 0.500, recall 0.000,
+  PR-AUC 0.075
+- Existing heuristic: accuracy 0.807, balanced accuracy 0.656, recall 0.478,
+  PR-AUC 0.386
+- XGBoost: accuracy 0.928, balanced accuracy 0.925, recall 0.922, PR-AUC
+  0.871
+
+Regenerate the detailed JSON and readable Markdown reports with
+`scripts.benchmark_model`. These metrics measure reproduction of synthetic
+labels, not validated future real-world traffic forecasting.
 
 **Known limitation:** as of this build, real Supabase coverage is ~81 rows
 (roughly a day and a half) — not enough for the per-location/hour baseline
@@ -217,4 +387,7 @@ environment. Realistic target before retraining on real data alone:
   OAuth is the known fix
 - Route Optimizer topology: hand-built placeholder graph, not real RTA
   network data
-- No backend/frontend/deployment yet — this is the agent core only
+- Real-only model evaluation needs independently labeled future traffic
+  outcomes; current evaluation uses synthetic labels
+- Reddit collection currently uses the public JSON endpoint despite OAuth
+  secrets being present in the workflow
