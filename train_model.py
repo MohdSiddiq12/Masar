@@ -168,6 +168,7 @@ def train(df: pd.DataFrame) -> XGBClassifier:
         learning_rate=0.05,
         scale_pos_weight=scale_pos_weight,
         eval_metric="logloss",
+        n_jobs=1,
     )
     model.fit(X_train, y_train)
 

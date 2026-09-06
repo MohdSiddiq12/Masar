@@ -1,0 +1,17 @@
+VE/
+venv/
+.venv/
+env/
+.git/
+.env
+.env.*
+!.env.docker.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+*.log
+reports/
+data/
+docs/archive/
+frontend/*.diff

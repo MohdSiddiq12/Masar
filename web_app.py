@@ -154,6 +154,9 @@ class MasarHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/health":
+            self._send(200, json.dumps({"status": "ok"}))
+            return
         if path == "/":
             self._send(
                 200,
@@ -203,8 +206,8 @@ class MasarHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("MASAR_PORT", "8000"))
-    server = ThreadingHTTPServer(("127.0.0.1", port), MasarHandler)
-    print(f"Masar is running at http://127.0.0.1:{port}")
+    port = int(os.getenv("PORT") or os.getenv("MASAR_PORT", "8000"))
+    server = ThreadingHTTPServer(("0.0.0.0", port), MasarHandler)
+    print(f"Masar is running at http://0.0.0.0:{port}")
     print("Demo mode is available in the browser; Live mode uses Groq.")
     server.serve_forever()
