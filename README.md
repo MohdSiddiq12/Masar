@@ -78,6 +78,21 @@ Train from synthetic data and start the local recommendation site:
 Open <http://127.0.0.1:8000>. Live traffic conditions are selected by default;
 manual speed/weather fields become available only when live traffic is turned
 off. The UI displays the selected data source and the age of live traffic.
+
+### Route Map
+
+The feature-branch UI includes an in-app Leaflet map for the five monitored
+corridors: Marina, Sheikh Zayed Road, Business Bay, Al Khail, and Airport. A
+recommendation returns both the selected route and the fastest baseline, so the
+map can show when congestion changes the path. OpenStreetMap tiles are used
+directly in the browser and do not require an API key, but the browser needs
+network access to load Leaflet and map tiles.
+
+The current map is a corridor-level visualization using the graph coordinates.
+For production road geometry, turn-by-turn instructions, and traffic-aware
+travel times, set `TOMTOM_API_KEY`; the existing `map.py` probe can be extended
+to request TomTom alternatives for each origin/destination pair. No additional
+key is required to run the current route comparison or local demo mode.
 Use `demo` mode for local fake LLM responses, or enable live Groq reasoning
 from the UI when `GROQ_API_KEY` is configured.
 

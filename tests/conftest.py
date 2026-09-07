@@ -25,6 +25,7 @@ def make_state():
             "social_signal": None,
             "recommended_mode": None,
             "recommended_route": [],
+            "route_options": [],
             "message_en": None,
             "message_ar": None,
         }

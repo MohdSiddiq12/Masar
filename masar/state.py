@@ -25,5 +25,6 @@ class MasarState(TypedDict):
     social_signal: Optional[str]
     recommended_mode: Optional[Literal["drive", "metro", "drive_to_metro"]]
     recommended_route: Annotated[list[str], operator.add]
+    route_options: Optional[list[dict]]
     message_en: Optional[str]
     message_ar: Optional[str]

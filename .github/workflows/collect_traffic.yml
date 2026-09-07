@@ -4,8 +4,8 @@ run-name: "Traffic Collection • ${{ github.event_name }} • ${{ github.run_nu
 
 on:
   schedule:
-    # Every 10 minutes (144 runs/day)
-    - cron: "*/10 * * * *"
+    # Every 5 minutes (288 runs/day)
+    - cron: "*/5 * * * *"
 
   workflow_dispatch:
 
@@ -101,7 +101,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Frequency | Every 10 minutes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frequency | Every 5 minutes |" >> $GITHUB_STEP_SUMMARY
           echo "| Run Number | $GITHUB_RUN_NUMBER |" >> $GITHUB_STEP_SUMMARY
           echo "| Trigger | $GITHUB_EVENT_NAME |" >> $GITHUB_STEP_SUMMARY
           echo "| UTC Time | $(date -u) |" >> $GITHUB_STEP_SUMMARY
