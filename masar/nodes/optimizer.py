@@ -50,12 +50,6 @@ def _recommend_mode(congestion: float) -> str:
 def route_optimizer_node(state: MasarState) -> dict:
     congestion = state.get("predicted_congestion") or 0.0
     mode = _recommend_mode(congestion)
-    if mode == "metro":
-        return {
-            "recommended_route": [],
-            "recommended_mode": mode,
-            "route_options": [],
-        }
 
     base_graph = _build_base_graph()
     graph = base_graph.copy()
@@ -89,7 +83,9 @@ def route_optimizer_node(state: MasarState) -> dict:
         )
 
     return {
-        "recommended_route": path,
+        # Metro remains the primary recommendation for severe congestion, but
+        # keep the lower-congestion road alternative visible and actionable.
+        "recommended_route": [] if mode == "metro" else path,
         "recommended_mode": mode,
         "route_options": route_options,
     }

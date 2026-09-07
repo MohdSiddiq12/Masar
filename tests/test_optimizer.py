@@ -11,7 +11,8 @@ def test_optimizer_switches_mode_for_heavy_congestion(make_state):
     result = route_optimizer_node(make_state(predicted_congestion=0.8))
     assert result["recommended_mode"] == "metro"
     assert result["recommended_route"] == []
-    assert result["route_options"] == []
+    assert result["route_options"][0]["recommended"] is True
+    assert result["route_options"][0]["coordinates"]
 
 
 def test_optimizer_avoids_congested_al_khail_corridor(make_state):

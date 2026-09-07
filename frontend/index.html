@@ -69,6 +69,9 @@
     .route-option strong { display:block; font-size:13px; }
     .route-option small { display:block; color:var(--muted); margin-top:5px; }
     .route-option .option-path { margin-top:8px; color:var(--ink); font-size:12px; }
+    .directions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .directions a { display:inline-flex; align-items:center; min-height:32px; padding:6px 10px; border:1px solid rgba(22,224,168,.4); border-radius:8px; color:var(--green-line); background:rgba(22,224,168,.08); text-decoration:none; font-size:12px; font-weight:700; }
+    .directions a:hover { border-color:var(--green-line); background:rgba(22,224,168,.16); }
     .progress-panel { margin-top:22px; padding-top:16px; border-top:1px solid rgba(255,255,255,.18); }
     .progress-panel[hidden] { display:none; }
     .progress-head { display:flex; justify-content:space-between; gap:16px; color:var(--ink); font-size:12.5px; font-weight:600; }
@@ -194,9 +197,21 @@
       routeMap = L.map("route-map", { zoomControl: true, scrollWheelZoom: false }).setView([25.17, 55.24], 11);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 18 }).addTo(routeMap);
     }
+    function directionsUrl(provider, option) {
+      const points = option.path || [];
+      if (points.length < 2) return "#";
+      const origin = encodeURIComponent(points[0]);
+      const destination = encodeURIComponent(points[points.length - 1]);
+      if (provider === "google") {
+        const waypoints = points.slice(1, -1).map(encodeURIComponent).join("|");
+        const waypointParam = waypoints ? `&waypoints=${waypoints}` : "";
+        return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving${waypointParam}`;
+      }
+      return `https://maps.apple.com/?saddr=${origin}&daddr=${destination}&dirflg=d`;
+    }
     function renderRouteMap(options, mode) {
       const routeOptions = options || [];
-      $("route-options").innerHTML = routeOptions.map((option) => `<article class="route-option${option.recommended ? " recommended" : ""}"><strong>${option.label}${option.recommended ? " · selected" : ""}</strong><small>${option.estimated_minutes} min · ${option.congestion_percent}% corridor load</small><div class="option-path">${option.path.join(" → ")}</div></article>`).join("");
+      $("route-options").innerHTML = routeOptions.map((option) => `<article class="route-option${option.recommended ? " recommended" : ""}"><strong>${option.label}${option.recommended ? " · selected" : ""}</strong><small>${option.estimated_minutes} min · ${option.congestion_percent}% corridor load</small><div class="option-path">${option.path.join(" → ")}</div><div class="directions" aria-label="Get directions for ${option.label}"><a href="${directionsUrl("google", option)}" target="_blank" rel="noopener noreferrer">Get directions · Google Maps</a><a href="${directionsUrl("apple", option)}" target="_blank" rel="noopener noreferrer">Get directions · Apple Maps</a></div></article>`).join("");
       routeLayers.forEach((layer) => routeMap && routeMap.removeLayer(layer));
       routeLayers = [];
       if (!routeOptions.length) {
