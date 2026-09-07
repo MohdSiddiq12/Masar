@@ -2,8 +2,15 @@ import json
 import threading
 import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 
 from web_app import MasarHandler
+
+
+def test_frontend_contains_current_map_ui():
+    html = (Path(__file__).parents[1] / "frontend" / "index.html").read_text(encoding="utf-8")
+    assert 'id="route-map"' in html
+    assert "Route intelligence" in html
 
 
 def test_health_endpoint():

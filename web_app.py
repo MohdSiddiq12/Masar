@@ -67,6 +67,7 @@ def make_state(payload):
         "social_signal": None,
         "recommended_mode": None,
         "recommended_route": [],
+        "route_options": [],
         "message_en": None,
         "message_ar": None,
     }
@@ -207,7 +208,21 @@ class MasarHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT") or os.getenv("MASAR_PORT", "8000"))
-    server = ThreadingHTTPServer(("0.0.0.0", port), MasarHandler)
-    print(f"Masar is running at http://0.0.0.0:{port}")
+    bind_host = os.getenv("MASAR_HOST") or ("0.0.0.0" if os.getenv("PORT") else "127.0.0.1")
+    requested_port = port
+    while True:
+        try:
+            server = ThreadingHTTPServer((bind_host, port), MasarHandler)
+            break
+        except OSError as error:
+            if error.errno not in {48, 98, 10048}:
+                raise
+            port += 1
+            if port > requested_port + 20:
+                raise RuntimeError(f"No available port found after {requested_port}") from error
+    browser_host = "127.0.0.1" if bind_host in {"0.0.0.0", "::"} else bind_host
+    print(f"Masar is running at http://{browser_host}:{port}")
+    if port != requested_port:
+        print(f"Port {requested_port} was already in use; using {port} instead.")
     print("Demo mode is available in the browser; Live mode uses Groq.")
     server.serve_forever()

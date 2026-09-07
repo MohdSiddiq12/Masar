@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
   <style>
     :root { --night:#0a0d12; --night-2:#12161d; --night-3:#181d26; --line:rgba(237,238,240,.09); --ink:#edeef0; --muted:#8b93a1; --red-line:#ff5c5c; --green-line:#16e0a8; --amber:#ffb648; --shadow:0 24px 60px rgba(0,0,0,.5); }
     * { box-sizing:border-box; }
@@ -55,6 +56,19 @@
     .eyebrow { display:inline-block; padding:5px 12px; border-radius:999px; background:rgba(22,224,168,.12); border:1px solid rgba(22,224,168,.3); color:var(--green-line); font-size:12.5px; font-weight:600; }
     .recommendation h2 { margin:14px 0 8px; font-family:"Bricolage Grotesque",sans-serif; font-size:28px; line-height:1.12; font-weight:700; }
     .recommendation p { color:var(--muted); margin:0; max-width:640px; font-size:16px; }
+    .map-panel { overflow:hidden; }
+    .map-head { padding:22px 22px 0; }
+    .map-head p { color:var(--muted); margin:5px 0 0; font-size:13px; }
+    #route-map { height:390px; margin-top:18px; background:#d8e1df; }
+    .leaflet-container { font:12px "Manrope",sans-serif; }
+    .leaflet-control-attribution { font-size:10px; }
+    .map-status { color:var(--muted); padding:10px 22px 0; font-size:12px; }
+    .route-options { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:16px 22px 22px; }
+    .route-option { padding:13px; border:1px solid var(--line); border-radius:12px; background:var(--night-3); }
+    .route-option.recommended { border-color:rgba(22,224,168,.55); box-shadow:inset 3px 0 var(--green-line); }
+    .route-option strong { display:block; font-size:13px; }
+    .route-option small { display:block; color:var(--muted); margin-top:5px; }
+    .route-option .option-path { margin-top:8px; color:var(--ink); font-size:12px; }
     .progress-panel { margin-top:22px; padding-top:16px; border-top:1px solid rgba(255,255,255,.18); }
     .progress-panel[hidden] { display:none; }
     .progress-head { display:flex; justify-content:space-between; gap:16px; color:var(--ink); font-size:12.5px; font-weight:600; }
@@ -129,15 +143,19 @@
         <article class="panel recommendation"><div class="eyebrow" id="mode-label">Recommended commute</div><h2 id="recommendation-title">Your next move will appear here.</h2><p id="message-en">Set your trip details and build a recommendation.</p><div class="progress-panel" id="progress-panel" hidden><div class="progress-head"><span id="progress-label">Preparing Masar</span><span class="progress-percent" id="progress-percent">0%</span></div><div class="progress-track"><span class="progress-fill" id="progress-fill"></span></div><div class="reasoning-line"><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="reasoning-text" aria-live="polite">Reading the current conditions</span></div><ul class="stage-list" aria-label="Recommendation stages"><li data-stage="0">Traffic</li><li data-stage="1">Prediction</li><li data-stage="2">Route</li><li data-stage="3">Guidance</li></ul></div><div class="route" id="route"></div></article>
         <div class="metrics"><article class="panel metric metric-lg"><small>Predicted congestion</small><span class="value" id="congestion">--</span><small id="confidence">Confidence --</small></article><article class="panel metric"><small>Road speed</small><span class="value" id="road-speed">--</span><small>km/h right now</small></article><article class="panel metric"><small>Temperature</small><span class="value" id="temp">--</span><small>Dubai, right now</small></article></div>
         <div class="detail-grid"><article class="panel detail"><h3>Traffic context</h3><p id="context">No context loaded yet.</p><p class="incident" id="incident"></p></article><article class="panel detail"><h3>Arabic guidance</h3><p class="arabic" id="message-ar">ستظهر التوصية هنا.</p></article></div>
+        <article class="panel map-panel"><div class="map-head"><h3 class="panel-title">Route intelligence</h3><p>See the recommended corridor and the fastest baseline after Masar weighs congestion.</p></div><div id="route-map" role="img" aria-label="Map showing the recommended route"></div><div class="map-status" id="map-status">Build a recommendation to compare routes on the map.</div><div class="route-options" id="route-options"></div></article>
         <article class="panel traffic"><h3 class="panel-title">Latest traffic signals <button type="button" id="refresh-traffic" class="ghost-btn">Refresh</button></h3><div class="traffic-list" id="traffic-list"><div class="loading">Loading live signals...</div></div></article>
       </section>
     </div>
     <footer class="stack-credit"><span>Built with</span><a class="chip" href="https://github.com/langchain-ai/langgraph" target="_blank" rel="noreferrer">LangGraph</a><a class="chip" href="https://github.com/dmlc/xgboost" target="_blank" rel="noreferrer">XGBoost</a><a class="chip" href="https://supabase.com" target="_blank" rel="noreferrer">Supabase</a><a class="chip" href="https://groq.com" target="_blank" rel="noreferrer">Groq</a><a class="chip" href="https://developer.tomtom.com" target="_blank" rel="noreferrer">TomTom</a><a class="chip" href="https://networkx.org" target="_blank" rel="noreferrer">NetworkX</a></footer>
   </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const form = $("trip-form");
     let progressTimer;
+    let routeMap;
+    let routeLayers = [];
     const progressMessages = ["Reading the current conditions", "Estimating congestion and confidence", "Comparing route and travel modes", "Composing your commute guidance"];
     function updateProgress(percent, stage, message) {
       $("progress-fill").style.width = `${percent}%`;
@@ -168,6 +186,37 @@
       updateProgress(100, 3, "Your route, mode, and guidance are ready");
       $("progress-panel").classList.add("complete");
     }
+    function initRouteMap() {
+      if (!window.L) {
+        $("map-status").textContent = "Map tiles are unavailable; route details are still shown below.";
+        return;
+      }
+      routeMap = L.map("route-map", { zoomControl: true, scrollWheelZoom: false }).setView([25.17, 55.24], 11);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors", maxZoom: 18 }).addTo(routeMap);
+    }
+    function renderRouteMap(options, mode) {
+      const routeOptions = options || [];
+      $("route-options").innerHTML = routeOptions.map((option) => `<article class="route-option${option.recommended ? " recommended" : ""}"><strong>${option.label}${option.recommended ? " · selected" : ""}</strong><small>${option.estimated_minutes} min · ${option.congestion_percent}% corridor load</small><div class="option-path">${option.path.join(" → ")}</div></article>`).join("");
+      routeLayers.forEach((layer) => routeMap && routeMap.removeLayer(layer));
+      routeLayers = [];
+      if (!routeOptions.length) {
+        $("map-status").textContent = mode === "metro" ? "Metro is recommended; no road route is being optimized." : "No road route is available for this selection.";
+        return;
+      }
+      $("map-status").textContent = routeOptions[0].recommended ? "Green is Masar's lower-congestion recommendation; the dashed line is the baseline." : "Route comparison ready.";
+      if (!routeMap) return;
+      routeOptions.forEach((option) => {
+        const layer = L.polyline(option.coordinates, { color: option.recommended ? "#16e0a8" : "#8b93a1", weight: option.recommended ? 6 : 3, opacity: option.recommended ? 0.95 : 0.65, dashArray: option.recommended ? null : "8 10" }).addTo(routeMap);
+        routeLayers.push(layer);
+        option.coordinates.forEach((coordinate, index) => {
+          if (index === 0 || index === option.coordinates.length - 1) {
+            routeLayers.push(L.circleMarker(coordinate, { radius: 6, color: option.recommended ? "#16e0a8" : "#8b93a1", fillColor: "#0a0d12", fillOpacity: 1, weight: 2 }).bindTooltip(option.path[index]).addTo(routeMap));
+          }
+        });
+      });
+      const recommended = routeOptions.find((option) => option.recommended) || routeOptions[0];
+      routeMap.fitBounds(recommended.coordinates, { padding: [24, 24] });
+    }
     function render(result) {
       const route = result.recommended_route || [];
       const mode = (result.recommended_mode || "drive").replaceAll("_", " ");
@@ -188,6 +237,8 @@
       $("road-speed").textContent = `${result.current_speed || "--"}`;
       $("temp").textContent = `${result.temperature || "--"}°`;
       $("route").innerHTML = route.map((place, index) => `<span>${place}</span>${index < route.length - 1 ? '<b class="arrow">→</b>' : ''}`).join("");
+      renderRouteMap(result.route_options, mode);
+      if (routeMap) routeMap.invalidateSize();
     }
     async function requestRecommendation(payload, signal) {
       const response = await fetch("/api/recommend", { method:"POST", signal, headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
@@ -252,6 +303,7 @@
       }
     }
     $("refresh-traffic").addEventListener("click", loadTraffic); loadTraffic(); setInterval(loadTraffic, 60000);
+    initRouteMap();
   </script>
 </body>
 </html>
