@@ -29,8 +29,9 @@ from sklearn.metrics import classification_report
 from xgboost import XGBClassifier
 
 from masar.features import FEATURE_ORDER, row_to_features
+from masar.locations import LOCATION_LABELS
 
-LOCATIONS = ["Sheikh Zayed Road", "Al Khail", "Business Bay", "Marina", "Airport"]
+LOCATIONS = LOCATION_LABELS
 ANOMALY_Z_THRESHOLD = 1.5
 
 

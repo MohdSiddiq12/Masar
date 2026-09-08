@@ -9,16 +9,7 @@ from typing import Any
 import httpx
 
 from masar.api_report import measured_call, record_call
-
-
-LOCATIONS = [
-    {"name": "Sheikh_Zayed_Rd", "label": "Sheikh Zayed Road", "lat": 25.2048, "lon": 55.2708},
-    {"name": "Al_Khail_Rd", "label": "Al Khail", "lat": 25.1200, "lon": 55.2400},
-    {"name": "Business_Bay", "label": "Business Bay", "lat": 25.1850, "lon": 55.2650},
-    {"name": "Dubai_Marina", "label": "Marina", "lat": 25.0800, "lon": 55.1400},
-    {"name": "Airport_Area", "label": "Airport", "lat": 25.2532, "lon": 55.3657},
-]
-LOCATION_BY_LABEL = {location["label"]: location for location in LOCATIONS}
+from masar.locations import LOCATION_BY_LABEL, LOCATIONS
 
 
 async def _fetch_tomtom(client: httpx.AsyncClient, lat: float, lon: float, api_key: str) -> dict:

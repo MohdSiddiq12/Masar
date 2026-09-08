@@ -35,3 +35,13 @@ def test_optimizer_exposes_baseline_route_for_comparison(make_state):
 def test_optimizer_handles_unknown_endpoints(make_state):
     result = route_optimizer_node(make_state(origin="Unknown", destination="Business Bay"))
     assert result["recommended_route"] == []
+
+
+def test_optimizer_routes_new_dubai_locations(make_state):
+    result = route_optimizer_node(
+        make_state(origin="Deira", destination="Marina")
+    )
+    assert result["route_options"]
+    assert result["route_options"][0]["path"][0] == "Deira"
+    assert result["route_options"][0]["path"][-1] == "Marina"
+    assert result["route_options"][0]["coordinates"]
