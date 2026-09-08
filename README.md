@@ -1,7 +1,7 @@
 # Masar (مسار) — Dubai Road-Congestion & Multi-Modal Commute Agent
 
-A LangGraph multi-agent system that predicts road congestion for key Dubai
-corridors and recommends drive / metro / drive-to-metro, with bilingual
+A LangGraph multi-agent system that predicts road congestion across Dubai
+locations and recommends drive / metro / drive-to-metro, with bilingual
 (English/Arabic) output. Built as a Dubai-specific reframe of the classic
 "predict transit delay" project: Dubai Metro is famously punctual, so the
 real local pain point is road congestion and mode choice, not transit
@@ -24,9 +24,9 @@ Predictor  →  Router  →  (fast: straight to Optimizer)
 - **Context** — LLM reasoning over available signal (incidents, weather).
   Social/events lookups are honest stubs pending Reddit (paused) and an
   events API (not yet wired).
-- **Route Optimizer** — NetworkX Dijkstra over an interim hand-built graph
-  of the 5 monitored corridors. Real RTA network topology was never
-  confirmed as integrated — this is a known, documented placeholder.
+- **Route Optimizer** — NetworkX Dijkstra over the monitored Dubai hubs and
+  nearby district connectors. Real RTA network topology was never confirmed
+  as integrated — this is a known, documented placeholder.
 - **Synthesis** — structured bilingual output via Pydantic + LLM.
 
 Every LLM-calling node accepts an optional `llm` parameter — production
@@ -81,8 +81,10 @@ off. The UI displays the selected data source and the age of live traffic.
 
 ### Route Map
 
-The feature-branch UI includes an in-app Leaflet map for the five monitored
-corridors: Marina, Sheikh Zayed Road, Business Bay, Al Khail, and Airport. A
+The feature-branch UI includes an in-app Leaflet map for a Dubai-wide catalog
+of locations, including Marina, Deira, Downtown Dubai, Mirdif, Jumeirah,
+Dubai Silicon Oasis, and the major residential, business, and waterfront
+districts. A
 recommendation returns both the selected route and the fastest baseline, so the
 map can show when congestion changes the path. OpenStreetMap tiles are used
 directly in the browser and do not require an API key, but the browser needs

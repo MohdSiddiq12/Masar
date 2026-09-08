@@ -4,12 +4,10 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from masar.locations import LOCATION_BY_LABEL
+
 LOCATION_TO_TRAFFIC_KEY = {
-    "Sheikh Zayed Road": "Sheikh_Zayed_Rd",
-    "Al Khail": "Al_Khail_Rd",
-    "Business Bay": "Business_Bay",
-    "Marina": "Dubai_Marina",
-    "Airport": "Airport_Area",
+    label: location["name"] for label, location in LOCATION_BY_LABEL.items()
 }
 
 TRAFFIC_COLUMNS = "current_speed,free_flow_speed,speed_ratio,weather_main,rain_mm,raw_data,created_at"

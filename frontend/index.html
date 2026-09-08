@@ -134,8 +134,8 @@
     <div class="grid">
       <form class="panel controls" id="trip-form">
         <h2 class="panel-title">Plan your route <span class="tag">Dubai</span></h2>
-        <label for="origin">From</label><select id="origin"><option>Marina</option><option>Sheikh Zayed Road</option><option>Al Khail</option><option>Business Bay</option><option>Airport</option></select>
-        <label for="destination">To</label><select id="destination"><option>Business Bay</option><option>Marina</option><option>Sheikh Zayed Road</option><option>Al Khail</option><option>Airport</option></select>
+        <label for="origin">From</label><select id="origin"><option>Loading Dubai locations...</option></select>
+        <label for="destination">To</label><select id="destination"><option>Loading Dubai locations...</option></select>
         <div class="switch-row"><span>Use live traffic conditions</span><label class="switch"><input id="live-traffic" type="checkbox" checked><span class="slider"></span></label></div>
         <div class="field-row"><div><label for="speed">Current speed</label><input id="speed" type="number" value="20" min="0"></div><div><label for="free-flow">Free-flow speed</label><input id="free-flow" type="number" value="90" min="1"></div></div>
         <div class="field-row"><div><label for="temperature">Temperature</label><input id="temperature" type="number" value="40"></div><div><label for="weather">Weather</label><select id="weather"><option>Clear</option><option>Cloudy</option><option>Rain</option></select></div></div>
@@ -261,6 +261,15 @@
       if (!response.ok) throw new Error(data.error || "The recommendation failed.");
       return data.result;
     }
+    async function loadLocations() {
+      const response = await fetch("/api/locations");
+      const locations = await response.json();
+      const options = locations.map((location) => `<option value="${location.label}">${location.label}</option>`).join("");
+      $("origin").innerHTML = options;
+      $("destination").innerHTML = options;
+      $("origin").value = "Marina";
+      $("destination").value = "Business Bay";
+    }
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const button = form.querySelector("button[type='submit']");
@@ -318,6 +327,10 @@
       }
     }
     $("refresh-traffic").addEventListener("click", loadTraffic); loadTraffic(); setInterval(loadTraffic, 60000);
+    loadLocations().catch(() => {
+      $("origin").innerHTML = "<option>Marina</option>";
+      $("destination").innerHTML = "<option>Business Bay</option>";
+    });
     initRouteMap();
   </script>
 </body>

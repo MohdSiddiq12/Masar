@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from dotenv import load_dotenv
 
 import masar.live_traffic as live_traffic
+from masar.locations import LOCATIONS
 
 load_dotenv()
 
@@ -171,6 +172,14 @@ class MasarHandler(BaseHTTPRequestHandler):
                 self._send(200, json.dumps({"rows": traffic_snapshot()}, default=str))
             except Exception as error:
                 self._send(503, json.dumps({"error": str(error)}))
+            return
+        if path == "/api/locations":
+            self._send(
+                200,
+                json.dumps(
+                    [{"label": location["label"], "lat": location["lat"], "lon": location["lon"]} for location in LOCATIONS]
+                ),
+            )
             return
         if path == "/api/traffic/latest":
             location = (parse_qs(urlparse(self.path).query).get("location") or [None])[0]
