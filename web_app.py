@@ -87,14 +87,15 @@ def run_recommendation(payload):
     use_live_traffic = payload.get("use_live_traffic", True)
 
     # Live-data lookup is independent of "demo": demo only controls whether
-    # Groq is faked out for speed/cost, not whether the traffic numbers are
-    # real. Best-effort and never fatal -- if Supabase creds are missing or
-    # the request fails, we fall back to whatever was manually entered.
+    # Groq is faked out for speed/cost. Each build fetches fresh provider data;
+    # if the providers are unavailable, fall back to manually entered values.
     live_fields, live_row, live_traffic_error = {}, None, None
     if use_live_traffic:
         try:
-            client = _get_supabase_client()
-            live_fields, live_row = live_traffic.get_live_fields(client, origin)
+            client = None
+            if os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_KEY"):
+                client = _get_supabase_client()
+            live_fields, live_row = live_traffic.refresh_live_fields(origin, client)
         except Exception as error:
             live_traffic_error = str(error)
 

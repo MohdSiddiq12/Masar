@@ -81,3 +81,19 @@ def get_live_fields(client: Any, location: str) -> tuple[dict, Optional[dict]]:
     if row is None:
         return {}, None
     return row_to_state_fields(row), row
+
+
+def refresh_live_fields(location: str, supabase_client: Any = None) -> tuple[dict, dict]:
+    """Fetch fresh provider data for a recommendation and optionally persist it."""
+    from masar.live_data import fetch_live_row
+
+    import asyncio
+
+    row = asyncio.run(fetch_live_row(location))
+    if supabase_client is not None:
+        try:
+            supabase_client.table("traffic_logs").insert(row).execute()
+        except Exception:
+            # A dashboard write must not prevent a recommendation from using fresh data.
+            pass
+    return row_to_state_fields(row), row

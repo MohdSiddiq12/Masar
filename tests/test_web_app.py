@@ -4,6 +4,7 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
+import web_app
 from web_app import MasarHandler
 
 
@@ -27,3 +28,31 @@ def test_health_endpoint():
         server.shutdown()
         thread.join()
         server.server_close()
+
+
+def test_recommendation_build_refreshes_live_conditions(monkeypatch):
+    calls = []
+
+    def refresh_live_fields(location, supabase_client=None):
+        calls.append((location, supabase_client))
+        return (
+            {
+                "current_speed": 18.0,
+                "free_flow_speed": 90.0,
+                "congestion_ratio": 0.2,
+                "weather_condition": "Rain",
+                "is_raining": True,
+                "temperature": 29.0,
+            },
+            {"created_at": "2026-09-08T10:00:00+00:00"},
+        )
+
+    monkeypatch.setattr(web_app.live_traffic, "refresh_live_fields", refresh_live_fields)
+    result = web_app.run_recommendation(
+        {"demo": True, "use_live_traffic": True, "origin": "Marina", "destination": "Business Bay"}
+    )
+
+    assert calls == [("Marina", None)]
+    assert result["used_live_traffic"] is True
+    assert result["current_speed"] == 18.0
+    assert result["temperature"] == 29.0
