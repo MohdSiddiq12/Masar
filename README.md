@@ -8,6 +8,8 @@ Masar is a Dubai-focused traffic and multimodal commute decision system built ar
 >
 > Recommendations: Treat the current system as a working local prototype for urban mobility reasoning. Use it as a foundation for production integration with verified traffic feeds, persistent storage, and proper auth.
 
+Read the Documentation for in depth information [Documentation](D:\Masar\Masar_Technical_Documentation.pdf)
+
 ## 1. Executive Overview
 
 ### Project purpose
