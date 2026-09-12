@@ -13,3 +13,6 @@ files.zip
 *.py[cod]
 __pycache__/VE/
 .env
+credentials
+masar-key.pem
+masar-key copy.pem
