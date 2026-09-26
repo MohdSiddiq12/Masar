@@ -1,0 +1,117 @@
+name: Deploy to AWS EC2
+
+run-name: "Deploy to EC2 • ${{ github.ref_name }} • ${{ github.run_number }}"
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: ec2-deployment
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to EC2 Instance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH Private Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Execute Remote Deployment on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          echo "Connecting to $EC2_USER@$EC2_HOST..."
+          
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+            set -e
+            echo "=== Masar Deployment Started ==="
+            
+            # Ensure Docker and Git are installed
+            if ! command -v docker &> /dev/null; then
+              echo "Installing Docker..."
+              sudo apt-get update
+              sudo apt-get install -y docker.io docker-compose
+              sudo usermod -aG docker $USER || true
+            fi
+
+            # Setup target project directory
+            APP_DIR="/home/$USER/Masar"
+            if [ ! -d "$APP_DIR" ]; then
+              echo "Cloning repository..."
+              git clone https://github.com/MohdSiddiq12/Masar.git "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            
+            echo "Fetching latest changes..."
+            git fetch --all
+            git reset --hard origin/main || git reset --hard origin/master
+
+            # Generate production .env file on EC2
+            cat << ENVEOF > .env.docker
+            PORT=8000
+            MASAR_HOST=0.0.0.0
+            TOMTOM_API_KEY=${TOMTOM_API_KEY}
+            OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+            SUPABASE_URL=${SUPABASE_URL}
+            SUPABASE_KEY=${SUPABASE_KEY}
+            GROQ_API_KEY=${GROQ_API_KEY}
+            ENVEOF
+
+            echo "Building and launching Docker containers..."
+            if command -v docker-compose &> /dev/null; then
+              sudo docker-compose down --remove-orphans || true
+              sudo docker-compose up -d --build
+            else
+              sudo docker stop masar 2>/dev/null || true
+              sudo docker rm masar 2>/dev/null || true
+              sudo docker build -t masar:latest .
+              sudo docker run -d --name masar --restart unless-stopped -p 8000:8000 --env-file .env.docker masar:latest
+            fi
+
+            echo "Verifying application health..."
+            sleep 5
+            for i in {1..6}; do
+              if curl -s -f http://127.0.0.1:8000/health > /dev/null; then
+                echo "Health check passed!"
+                break
+              fi
+              echo "Waiting for service startup... ($i/6)"
+              sleep 5
+            done
+
+            echo "=== Deployment Completed Successfully ==="
+          EOF
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "## Masar EC2 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Target Host | \`${{ secrets.EC2_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | Success |" >> $GITHUB_STEP_SUMMARY

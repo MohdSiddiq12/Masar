@@ -18,8 +18,8 @@ RUN python -m pip install --upgrade pip \
 
 COPY . .
 
-# models/ is ignored by Git, so create the demo artifact reproducibly in the image.
-RUN python train_model.py --synthetic-rows 6000
+# Preserves pre-trained models/congestion_xgb.pkl if present; falls back to synthetic if missing.
+RUN if [ ! -f models/congestion_xgb.pkl ]; then python train_model.py --synthetic-rows 6000; fi
 
 EXPOSE 8000
 
