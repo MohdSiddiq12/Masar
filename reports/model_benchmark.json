@@ -1,0 +1,62 @@
+{
+  "dataset": {
+    "total_rows": 4773,
+    "locations": 41,
+    "date_min": "2026-09-03",
+    "date_max": "2026-09-24",
+    "train_rows": 3818,
+    "test_rows": 955
+  },
+  "labels": {
+    "train_anomalous": 34,
+    "train_anomaly_rate": 0.00890518596123625,
+    "test_anomalous": 76,
+    "test_anomaly_rate": 0.07958115183246073
+  },
+  "baseline": {
+    "classification": {
+      "accuracy": 0.7812,
+      "balanced_accuracy": 0.7249,
+      "precision": 0.2146,
+      "recall": 0.6579,
+      "f1": 0.3236,
+      "roc_auc": 0.7293,
+      "pr_auc": 0.1692
+    },
+    "regression": {
+      "mae": 0.1674,
+      "rmse": 0.2819,
+      "r2": -2.7112,
+      "mape": 24.1075
+    }
+  },
+  "improved_classification": {
+    "accuracy": 0.8723,
+    "balanced_accuracy": 0.564,
+    "precision": 0.1974,
+    "recall": 0.1974,
+    "f1": 0.1974,
+    "roc_auc": 0.7651,
+    "pr_auc": 0.1899,
+    "cv_f1_mean": 0.0131,
+    "cv_f1_std": 0.0108,
+    "cv_roc_auc_mean": 0.7011,
+    "cv_roc_auc_std": 0.1402,
+    "cv_mae_mean": 0.0024,
+    "cv_rmse_mean": 0.0051,
+    "cv_r2_mean": 0.9987,
+    "feature_importance": {
+      "current_speed": 0.2709,
+      "free_flow_speed": 0.2595,
+      "congestion_ratio": 0.4696,
+      "temperature": 0.0,
+      "is_raining": 0.0
+    }
+  },
+  "improved_regression": {
+    "mae": 0.0018,
+    "rmse": 0.0043,
+    "r2": 0.9991,
+    "mape": 0.2698
+  }
+}
